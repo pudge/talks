@@ -1,0 +1,17 @@
+#!/usr/bin/perl
+use strict;
+use 5.018;
+
+use D'oh 'maggie';
+
+warn 'homer';
+D'oh::stderr('/tmp/dohbart');
+D'oh::stdout($D'oh::ERRFILE); #'#
+
+D'oh::date();
+warn 'marge';
+say 'lisa';
+
+my %params = ( debug => 1, no_debug => 1 );
+my @levels = reverse 0..3;
+maggie(\%params, \@levels);

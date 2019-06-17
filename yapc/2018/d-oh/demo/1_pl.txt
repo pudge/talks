@@ -1,0 +1,13 @@
+#!/usr/bin/perl
+use strict;
+use 5.018;
+
+use D'oh;
+
+warn 'homer';
+D'oh::stderr('/tmp/dohbart');
+D'oh::stdout($D'oh::ERRFILE); #'#
+
+
+warn 'marge';
+say 'lisa';
