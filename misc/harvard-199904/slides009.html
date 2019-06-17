@@ -1,0 +1,74 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<HTML>
+<HEAD>
+	<TITLE>Issue #3: System Interaction ("Don't"s Part I)</TITLE>
+
+<!--
+Created on    : Sunday, April 11, 1999
+Last modified : Friday, October 08, 1999
+by            : Pudge, pudge@pobox.com
+with          : BBEdit and MacPerl
+filename      : /macperl/slides/harvard-199904/slides009.html
+-->
+
+<LINK REL=STYLESHEET TYPE="text/css" HREF="styles.css">
+</HEAD>
+
+<BODY BGCOLOR="#FFD700" ALINK="#888888" VLINK="#888888" LINK="#888888">
+
+<TABLE BORDER=0 CELLPADDING=8>
+<TR><TD WIDTH=225 VALIGN="top">
+
+<TABLE BORDER=4 CELLPADDING=8><TR><TD BGCOLOR="#000000"><FONT COLOR="#FFFFFF">
+
+<H3>Portability and MacPerl, or How I Learned To Stop Worrying And Love The Mac</H3>
+<P><STRONG>CSCI E-13, Harvard University</STRONG></P>
+<P>April 21, 1999</P>
+<P>Chris Nandor, mailto:pudge@pobox.com, http://pudge.net/</P>
+
+
+<P ALIGN="CENTER" CLASS="SMALL">[<A HREF="./index.html">Main</A>] [<A HREF="./slides008.html">Prev</A>] [<A HREF="./slides010.html">Next</A>]</P>
+
+
+
+<P CLASS="SMALL"><EM>&copy; 1999.  All Rights Reserved.</EM>
+
+</FONT></TD></TR></TABLE></TD><TD>
+
+<H2>Issue #3: System Interaction ("Don't"s Part I)</H2>
+
+
+
+<UL>
+
+<LI>No command line?  Don't worry about it, but realize it
+<BR><BR></LI>
+
+
+<LI>Don't depend on <TT>%ENV</TT>
+<BR><BR></LI>
+
+
+<LI>Don't use <TT>%SIG</TT>
+<BR><BR></LI>
+
+
+<LI>Don't glob (use <TT>readdir</TT> instead)
+<BR><BR></LI>
+
+
+<LI>Don't rely on value of <TT>$!</TT>
+<BR><BR></LI>
+
+
+<LI>No UID, no GID, no HOME
+<BR><BR></LI>
+
+
+</UL>
+
+
+</TD></TR></TABLE>
+
+</BODY>
+</HTML>

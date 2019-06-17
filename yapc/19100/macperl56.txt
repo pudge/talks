@@ -1,0 +1,107 @@
+MacPerl 5.6
+yapc 19100
+22 June 19100
+Chris Nandor, Andover.Net
+yapc_19100_presentation
+
+Me
+	* Work on Slash code
+	* Been using MacPerl extensively since 1996
+	* Co-authored "MacPerl: Power and Ease"
+	* Author of several MacPerl modules
+	* Help with MacPerl porting
+
+(Previous) Steps to Build MacPerl
+	* Be Matthias Neeracher
+	* Port required pieces
+	* Edit Perl sources to work on the Mac
+	* Write and build POSIX library (GUSI)
+	* Using expensive, proprietary compilers, build
+		command-line tools (miniperl and perl) for MPW,
+		perl and MacPerl extensions, and MacPerl application
+
+How To Be Matthias Neeracher
+	* Port GNU Awk to Mac OS in 1990
+	* Start work on port of Perl during compulsory basic
+		training in Swiss army in summer 1991
+	* Port patch and dmake
+	* Port SFIO, Berkeley DB
+	* Write socket/POSIX libraries
+
+Here, Little Piggy
+	* GUSI stands for Grand Unified Socket Interface
+	* A "gusi" is a piglet in the Bernese dialect of Swiss German
+	* GUSI was originally for emulating BSD sockets on Mac OS,
+		but has evolved into a general-purpose POSIX
+		emulation library
+	* MacPerl 5.6 will be the first to use GUSI 2, which
+		introduces POSIX threads and some previously
+		unimplemented functions (e.g., socketpair)
+
+Perl Sources
+	* Paths in Makefiles, etc.; File::Spec used in more places
+	* defines (<TT>MACOS_TRADITIONAL</TT>)
+	* xsubpp changes and additions (some experimental)
+	* In .c files, bunches of small Mac-specific changes,
+		like retrieving of Mac errors for <TT>$^E</TT>
+		(<TT>gMacPerl_OSErr</TT>), switch handling
+		(-u, -e, etc.), filespecs
+	* Amount of changes about the same as for any other port,
+		like VMS, DOS, etc.
+	* Previously was separate source; currently, integrating
+		patches for MacPerl into the main perl source
+
+Compilers
+	* Previously only used Metrowerks CodeWarrior compilers
+		for MPW, with builds for 68K, CFM68K, PPC
+	* CFM68K is for 68K Macs that use Code Fragment Manager
+		(allows dynamic loading)
+	* MWC compilers proprietary and expensive
+	* Now use Apple and Metrowerks CodeWarrior, 68K and PPC <PRE>
+	+-------+----------+----------+
+	|       |  68K     |  PPC     |
+	+-------+----------+----------+
+	| Apple |  SC      |  MrC     |
+	+-------+----------+----------+
+	| MWC   |  MWC68K  |  MWCPPC  |
+	+-------+----------+----------+
+
+	* Apple compilers are proprietary and freely available
+	* Metrowerks compilers are essentially better
+	* Apple compilers build larger (slower ???) binaries
+
+Threads & Fork
+	* Single process with multiple threads (5005threads?)
+	* Multiple "applications" in a single process (ithreads?)
+	* Mac OS only allows one instance of a given "physical"
+		application to run at a time
+	* LWP/HWT (light-weight process, heavy-weight thread):
+		threads with their own fd table and sfio environment
+	* "Win32" fork() emulation
+	* Details very sketchy right now
+	* Another possibility: MacPerl shared library could be accessed
+		by multiple smaller processes, so multiple
+		simultaneous perl programs could run
+
+Testing
+	* First, port the test suite itself
+	* Require path changes, etc.
+	* Uncover bugs, fix bugs, test again
+
+	
+Modules
+	* Some already ported
+	* Some need no porting
+	* Some run now, but new features (like qr//) mean new
+		porting/testing done again
+	* Some cannot be ported until MacPerl 5.6 is "done"
+	* Some cannot be ported until other modules are ported
+		which cnanot be done until MacPerl 5.6 is
+		"done"
+
+Links
+	* GUSI: http://www.iis.ee.ethz.ch/~neeri/macintosh/gusi-qa.html
+	* Downloads: http://www.iis.ee.ethz.ch/~neeri/Downloads/
+	* MPW: http://developer.apple.com/tools/mpw-tools/
+	* MacPerl: http://www.macperl.com/
+	* Talk: http://pudge.net/macperl/yapc/19100/

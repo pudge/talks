@@ -1,0 +1,13 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+        "http://www.w3.org/TR/2000/REC-xhtml1-20000126/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<title>Code: poll_20</title>
+	<link rel="Stylesheet" href="./styles.css" type="text/css" />
+</head>
+<body class="codepage">
+<blockquote><p class="codepage"><tt>
+sub pollbooth {<br />&nbsp; &nbsp; my($qid, $no_table, $center) = @_;<br />&nbsp; &nbsp; my $slashdb = getCurrentDB();<br />&nbsp; &nbsp; my $constants = getCurrentStatic();<br /><br />&nbsp; &nbsp; $qid = $slashdb-&gt;getVar('currentqid', 'value') unless $qid;<br />&nbsp; &nbsp; return "" if $qid eq "";<br />&nbsp; &nbsp; my $sect = getCurrentUser('currentSection');<br />&nbsp; &nbsp; my $polls = $slashdb-&gt;getPoll($qid);<br /><br />&nbsp; &nbsp; my $pollbooth = slashDisplay('pollbooth', {<br />&nbsp; &nbsp; &nbsp; &nbsp; polls&nbsp; &nbsp; &nbsp; &nbsp;=&gt; $polls,<br />&nbsp; &nbsp; &nbsp; &nbsp; question&nbsp; &nbsp; =&gt; $polls-&gt;[0][0],<br />&nbsp; &nbsp; &nbsp; &nbsp; qid&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;=&gt; $qid,<br />&nbsp; &nbsp; &nbsp; &nbsp; voters&nbsp; &nbsp; &nbsp; =&gt; $slashdb-&gt;getPollQuestion($qid, 'voters'),<br />&nbsp; &nbsp; &nbsp; &nbsp; comments&nbsp; &nbsp; =&gt; $slashdb-&gt;countCommentsBySid($qid),<br />&nbsp; &nbsp; &nbsp; &nbsp; sect&nbsp; &nbsp; &nbsp; &nbsp; =&gt; $sect,<br />&nbsp; &nbsp; }, 1);<br /><br />&nbsp; &nbsp; return $pollbooth if $no_table;<br />&nbsp; &nbsp; fancybox($constants-&gt;{fancyboxwidth}, 'Poll', $pollbooth, $center, 1);<br />}<br />
+</tt></p></blockquote>
+</body>
+</html>

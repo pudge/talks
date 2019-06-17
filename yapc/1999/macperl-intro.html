@@ -1,0 +1,304 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<HTML>
+<HEAD>
+	<TITLE>MacPerl and the Elements of the Wild</TITLE>
+</HEAD>
+<BODY>
+
+<H1>MacPerl and the Elements of the Wild</H1>
+
+<H2>Chris Nandor
+&lt;<A HREF="mailto:pudge@pobox.com">pudge@pobox.com&gt;</A></H2>
+
+<P>
+Mac OS is a difficult OS to script, in many respects.  You can't talk
+to the STDIN and STDOUT of most programs, because they don't have
+STDIN or STDOUT.  So Apple came up with its own form of high-level
+interapplication communication.  They developed a system for
+identifying objects in an application, a protocol for communication,
+an architecture for scripting languages to gain access to the whole
+thing, and a scripting language over their own to make it all work
+for the average user.
+</P>
+
+<P>
+So now we have Apple events to talk to other programs.  They can be
+called from most any language on the Mac.  AppleScript has become the
+default way to do Apple events.  However -- and no offense intended
+to those who disagree -- some of feel that AppleScript is an unwieldy
+language that is only to be used when it has to be used; i.e., when
+we need to do a lot of work with Apple events.
+</P>
+
+<P>
+You see, Apple events can be spoken by most any language, but they
+are so cryptic that those of us who greatly dislike AppleScript would
+often rather use AppleScript than have to deal with the raw Apple
+events ourselves.  The basic AppleScript might look like this:
+</P>
+
+<PRE>
+    tell application "FileMaker Pro"
+    	set mycells to get the second cell of (the records whose eighth cell contains "bill") of database "Check Tracker"
+    end tell
+</PRE>
+
+<P>
+I don't know about you, but I have been working with this stuff for
+some time, and I still have trouble parsing it in my head.  It is
+hard to tell what is what in AppleScript.  But consider the raw
+Apple event (note that the quote marks here, and in raw forms following,
+are really supposed to be curly quotes):
+</P>
+
+<PRE>
+    core/getd:'----':obj {
+        form:indx, want:type(ccel), seld:long(2), from:obj {
+            form:test, want:type(crow), from:obj {
+                form:name, want:type(cDB ), seld:"Check Tracker", from:'null'()
+            },
+            seld:cmpd{
+                relo:cont,
+                'obj1':obj {form:indx, want:type(ccel), seld:long(8), from:'exmn'()}, 
+                'obj2':"bill"
+            }
+        }
+    }
+</PRE>
+
+<P>
+Hm.  Um, yeah, OK.  Nasty, but this was the way you have to deal with it in
+something like C or MacPerl.  You can construct it this way, or you can do
+it with a functional or OO interface.  But in any event, it will be tough.
+Not the way I want to spend my Saturday nights.  But I am writing this on
+a Thursday evening, so:
+</P>
+
+<PRE>
+    use Mac::AppleEvents;
+
+    my $string = &lt;&lt;EOT;
+    '----':obj {
+        form:indx, want:type(ccel), seld:long(2), from:obj {
+            form:test, want:type(crow), from:obj {
+                form:name, want:type(cDB ), seld:"Check Tracker", from:'null'()
+            },
+            seld:cmpd{
+                relo:cont,
+                'obj1':obj {form:indx, want:type(ccel), seld:long(8), from:'exmn'()}, 
+                'obj2':"bill"
+            }
+        }
+    }
+    EOT
+
+    my $evt = AEBuildAppleEvent('core', 'getd', typeApplSignature,
+        'FMP3', kAutoGenerateReturnID, kAnyTransactionID, $string) or die $^E;
+    my $rep = AESend($evt, kAEWaitReply) or die $^E;
+    my $desc = AEGetParamDesc($rep, keyDirectObject) or die $^E;
+    my @data;
+
+    if ($desc-&gt;type eq typeAEList) {
+        foreach (1 .. AECountItems($desc)) {
+            my $data = AEGetNthDesc($desc, $_) or die $^E;
+            push @data, $data-&gt;get;
+            AEDisposeDesc $data or die $^E;
+        }
+    } else {
+        push @data, $desc-&gt;get;
+    }
+
+    AEDisposeDesc $evt or die $^E;
+    AEDisposeDesc $rep or die $^E;
+    AEDisposeDesc $desc or die $^E;
+
+</PRE>
+
+<P>
+Ouchie.
+</P>
+
+<P>
+So, we want a way to do Apple events that is as easy as AppleScript, but
+that doesn't have all of the things we don't like about AppleScript.  In
+essence, we're creating a new language, not quite AppleScript, but in
+many ways based on it, using Perl.  Again, I cannot speak for everyone,
+but I would much rather do this:
+</P>
+
+<PRE>
+    use Mac::Glue ':glue';
+    my $fmp = new Mac::Glue 'FileMaker Pro';
+    my @cells = $fmp-&gt;get(
+        $fmp-&gt;obj(
+            cell =&gt; 2,
+            records =&gt; whose(cell =&gt; 8 =&gt; contains =&gt; 'bill'),
+            database =&gt; 'Check Tracker'
+        )
+    );
+    die $^E if $^E;
+</PRE>
+
+<P>
+Truth be told, it still isn't the prettiest thing.  But it is about as
+good as we are going to get.  Apple event objects are complex things,
+and describing them is no easy task.  But how do we get from
+a functional interface with creating and disposing of descriptors or
+putting together complex descriptor records in text form to the
+simplistic Mac::Glue interface?
+</P>
+
+<P>
+I'm glad you asked.
+</P>
+
+<P>
+An application that can be controlled by Apple events is called
+<EM>scriptable</EM>.  All Mac applications have a resource fork,
+and all scriptable applications have an Apple Event Terminology
+Extension resource (noted by the ID "aete").  It stores the
+human language name for an event.  You may note that in the raw
+form above, the "get" event is called "core/getd".  The get event
+is "getd", and it is in the "core" suite.  We don't need to know
+that as programmers, though.  That's what computers are for.
+So the aete maps human language names to the computer names.
+</P>
+
+<P>
+It does more than just map event names.  It notes what various
+parameters an event may accept, and what data types each parameter
+expects (yes, we need to worry about data types with Apple events ...
+but this is Perl, so Mac::Glue tries to hide the details of that
+whenever possible).  It also identifies classes, with their human
+language names and IDs.  In the above example, "cell", "records",
+and "database" are all class names.
+</P>
+
+<P>
+An application is simply dropped on a special MacPerl droplet,
+and the applications' aete resource is parsed and saved as
+a persistent Perl data structure, as a "glue".  Then it can
+be called in the <TT>Mac::Glue-&gt;new</TT> constructor, and
+the application can be scripted with simplicity matching that
+of AppleScript.
+</P>
+
+<P>
+I won't bore you with all of the gory details of how
+Mac::Glue is implemented.  The source is available, of course,
+and if you are interested you can read it.  Basically, you
+create an object instance, and call events as object methods,
+passing in parameters and their values as key/value pairs
+(except for the direct object parameter value, which, if present,
+is passed first, with no key).
+</P>
+
+<P>
+The value of each key is either a simple data type or an object
+specifier record, created with the <TT>obj</TT> method.  The method
+call returns whatever data the event returns, and any error
+is put into <TT>$^E</TT> (which works like <TT>$!</TT>).
+</P>
+
+<P>
+An object specifier
+record consists, in simple terms, of a series of key/value
+pairs, where each pair contains the one preceding it
+(such as in "cell =&gt; 1, record =&gt; 2, database =&gt; 'Foo'").
+The value of each key can be many different things, like
+a logical test, a range, an index, a name,
+or an insertion location.  Some of these are specified
+using special functions (like <TT>whose()</TT> and
+<TT>range()</TT>), others are specified using simple data,
+and Mac::Glue guesses as to what it should be.  Regular text
+is assumed to be a name, and numbers are assumed to be
+numeric indexes.  There is also a function to specify data
+types and forms.  In most cases, Mac::Glue will do all the work.
+</P>
+
+<P>
+Mac::Glue does its best to make things as perlish as possible.
+For instance, Apple events have data structures called
+records and lists, which correspond to Perl hashes and arrays.
+So, passing an anonymous array or hash (or any arbitrarily nested
+combination) is converted into the corresponding Apple event
+data structures.  Same thing goes when they are returned back,
+too.
+</P>
+
+<PRE>
+    $app-&gt;make(new =&gt; window =&gt; with_properties =&gt;
+        {name =&gt; "Foo", position =&gt; [300, 100]}
+    );
+</PRE>
+
+<P>
+<B>NB:</B> Oddly enough (or not), Apple event lists use
+brackets as Perl anonymous arrays do, and Apple event records
+use braces as Perl anonymous hashes do.  AppleScript uses braces
+for records, but can use brackets or braces for lists.
+But I digress.
+</P>
+
+<P>
+There's quite a bit going on in that event call.  First,
+Mac::Glue determines that the "make" event corresponds
+to the application's "core/crel" event.  It notes that
+the "new" parameter has the ID "kocl", and "with_properties"
+is "prdt".  The "kocl" parameter asks for a type, so
+it looks to see if "window" is a type, and indeed it is:
+its ID is "cwin".  It converts the value of the 
+"prdt" parameter to an Apple event data structure, looking
+up the values for the name ("pnam") and position ("ppos")
+parameters.  The value for "pnam" is a text value, so it
+is added as a character data type.  Then it puts the anonymous
+array <TT>[300, 100]</TT> (with each value as an integer data type)
+into an Apple event list with the same values.
+</P>
+
+<P>
+Whew!  We don't want to think about all of that, though.  At least,
+I don't.  Again, you might like that kind of thing.  You might
+prefer this (which doesn't look so bad after reading
+the previous paragraph):
+</P>
+
+<PRE>
+    core/crel: kocl:type(cwin), prdt:{pnam:"Foo", ppos:[300, 100]}
+</PRE>
+
+<P>
+But I don't think you prefer that.  And I am never, evr, wrong.
+</P>
+
+<P>
+There are other things Mac::Glue does for you.  Of course, it converts
+the data structures, it creates events, adds parameters, sends them,
+and checks for errors (and puts them into <TT>$^E</TT>).
+It's also pretty good at coercing data types automatically.
+For instance, a 1 or 0 is converted to Apple event booleans
+if a boolean data type is requested by a parameter.
+If an alias is called for, and a file path is passed, it will be
+converted to an alias with <TT>Mac::Files::NewAliasMinimal()</TT>.
+FSSpecs are similarly converted.  And of course, on return they
+are converted back into file paths.  Text types like international
+and styled text are coerced into regular text on return.
+</P>
+
+<P>
+The programmer can have as much control as he wants, too, as the complete,
+raw, Mac::AppleEvents functions and constants are available
+via the <TT>:all</TT> import tag.  And by using the <TT>RETOBJ</TT> method
+or event parameter, the programmer can get access to the complete Apple event
+and reply descriptors, and can munge the data however he likes.
+</P>
+
+<P>
+Mac::Glue is still in development, but is moving rapidly toward a beta
+release, and its basic feature set is nearing completion.  More
+information is always available from my MacPerl site at
+<A HREF="http://pudge.net/macperl/">http://pudge.net/macperl/</A>.
+</P>
+
+</BODY>
+</HTML>

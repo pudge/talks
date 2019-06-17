@@ -1,0 +1,76 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+                        "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+<TITLE>Object Specifier Records</TITLE>
+
+<!--
+Created on    : Monday, June 21, 1999
+Last modified : Friday, October 08, 1999
+by            : Pudge, pudge@pobox.com
+with          : BBEdit and MacPerl
+filename      : /macperl/yapc/1999/macperl-19990624/slides015.html
+-->
+
+<LINK REL=STYLESHEET TYPE="text/css" HREF="styles.css">
+</HEAD>
+
+<BODY>
+
+<TABLE BORDER=0 CELLPADDING=8 WIDTH="100%">
+<TR><TD ALIGN="CENTER">
+<H3>MacPerl and the Elements of the Wild</H3>
+<STRONG>yet another perl conference</STRONG> -- <EM>June 24, 1999</EM><BR>
+Chris Nandor, mailto:pudge@pobox.com, http://pudge.net/
+
+<P>[<A HREF="./index.html">Main</A>] [<A HREF="./slides014.html">Prev</A>] [<A HREF="./slides016.html">Next</A>]
+
+</P>
+
+</TD></TR></TABLE>
+
+<H2>Object Specifier Records</H2>
+
+
+
+<UL>
+
+<LI>This is where Apple events get messy
+<BR><BR></LI>
+
+
+<LI>An AE object consists of four parts: class,
+        container, data form, and data (and type).
+<BR><BR></LI>
+
+
+<LI>In Mac::Glue, order determines containers,
+        class and data are specified, and data form and type
+        are guessed (or can be stated explicitly)
+<BR><BR></LI>
+
+
+<LI>Example: <PRE>
+    $folder = $finder-&gt;obj( file =&gt; 'Foo', folder =&gt; 'Bar', disk =&gt; 2 );
+    $finder-&gt;open($folder);
+</PRE>
+</LI>
+
+
+<LI>"disk" object contains "folder" object which contains "file" object
+<BR><BR></LI>
+
+
+<LI> Data for "folder" and "file" objects are type <TT>typeChar</TT> and form
+        <TT>formName</TT>, since they are text.  Data for "disk" is type
+        <TT>typeInteger</TT> and form <TT>formAbsoluteIndex</TT>.  The <TT>obj_form</TT> function
+        allows specifying other forms and types.
+<BR><BR></LI>
+
+
+</UL>
+
+<P><SMALL><EM>&copy; 1999.  All Rights Reserved.</EM></SMALL></P>
+
+</BODY>
+</HTML>

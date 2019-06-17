@@ -1,0 +1,76 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<HTML>
+<HEAD>
+	<TITLE>Issue #1: Newlines (cont.)</TITLE>
+
+<!--
+Created on    : Sunday, April 11, 1999
+Last modified : Friday, October 08, 1999
+by            : Pudge, pudge@pobox.com
+with          : BBEdit and MacPerl
+filename      : /macperl/slides/harvard-199904/slides006.html
+-->
+
+<LINK REL=STYLESHEET TYPE="text/css" HREF="styles.css">
+</HEAD>
+
+<BODY BGCOLOR="#FFD700" ALINK="#888888" VLINK="#888888" LINK="#888888">
+
+<TABLE BORDER=0 CELLPADDING=8>
+<TR><TD WIDTH=225 VALIGN="top">
+
+<TABLE BORDER=4 CELLPADDING=8><TR><TD BGCOLOR="#000000"><FONT COLOR="#FFFFFF">
+
+<H3>Portability and MacPerl, or How I Learned To Stop Worrying And Love The Mac</H3>
+<P><STRONG>CSCI E-13, Harvard University</STRONG></P>
+<P>April 21, 1999</P>
+<P>Chris Nandor, mailto:pudge@pobox.com, http://pudge.net/</P>
+
+
+<P ALIGN="CENTER" CLASS="SMALL">[<A HREF="./index.html">Main</A>] [<A HREF="./slides005.html">Prev</A>] [<A HREF="./slides007.html">Next</A>]</P>
+
+
+
+<P CLASS="SMALL"><EM>&copy; 1999.  All Rights Reserved.</EM>
+
+</FONT></TD></TR></TABLE></TD><TD>
+
+<H2>Issue #1: Newlines (cont.)</H2>
+
+
+
+<UL>
+
+<LI>Convert socket newlines to local newlines
+<PRE>        local $/ = "\012";  # input record separator is LF
+        while (&lt;SOCKET&gt;) {
+            s/\015?\012/\n/;
+        }
+
+        $data =~ s/\015?\012/\n/g;</PRE>
+</LI>
+
+
+<LI>Same thing, with perl 5.005
+<PRE>        use Socket qw(:crlf);
+        local $/ = LF;
+        while (&lt;SOCKET&gt;) {
+            s/$CR?$LF/\n/;
+        }
+
+        $data =~ s/$CR?$LF/\n/g;</PRE>
+</LI>
+
+
+<LI>Convert data from unknown <TT>CR</TT>, <TT>LF</TT>, or <TT>CRLF</TT>
+<PRE>        $data =~ s/(\015\012?|\012)/\n/g;</PRE>
+</LI>
+
+
+</UL>
+
+
+</TD></TR></TABLE>
+
+</BODY>
+</HTML>

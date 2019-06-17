@@ -1,0 +1,52 @@
+"makeslides" README file
+
+Written by Chris Nandor, pudge@pobox.com.
+
+Some additional modifications and documentation by Richard Dice,
+rdice@pobox.com.
+
+Usage: ./makeslides [ --frames | --table ] filename.txt
+Default --frames is assumed
+
+This usage message will be displayed on STDERR if "makeslides" is invoked
+
+    * with -h
+    * with --help
+    * without any command line arguments
+
+"filename.txt" must end with ".txt".  Inspect the attached file
+"tpc_2001_presentation.txt" file to see the format of file that "makeslides"
+expects and requires.  It should be fairly self-explantory.  Also, RTFS
+(Read The Fine Source) for more information on what kind of a file "makeslides"
+expect and features it provides.
+
+From this text file, a directory will be created, named "filename".
+The contents of the filename/ directory depend on whether "makeslides" is
+called with the --frames option or the --table option (or no option at all,
+in which case --frames is assumed).  In all cases, the following files are
+produced:
+
+    * index.html - an introductory title page
+    * toc.html   - Table of Contents page
+    * styles.css - Cascading Style Sheet information
+
+In addition to these three files, more files will be created.  In the case
+of the --table option, the files will be named in the form "slide%03d.html"
+and they will contain the bullet point and header information found in
+"filename.txt".  If --frames was chosen, then 3 files will be created for
+each section in "filename.txt":
+
+    * slide%03d.html
+    * frame_a_slide%03d.html
+    * frame_b_slide%03d.html
+
+In both of these cases, if there were any __CODE__ sections named following
+an __END__ line in "filename.txt", files based on the __CODE__ sections
+will be created as well.
+
+Note that if you have a pre-existing filename/ directory, then you will 
+need to delete it with "rm -rf filename/" prior to running
+"./makeslides filename.txt" in order to clear it out.
+
+Cheers,
+Richard

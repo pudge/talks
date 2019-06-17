@@ -1,0 +1,659 @@
+#!/usr/bin/perl -w                      # -*- cperl -*-
+
+# makeslides - an HTML slide maker
+
+# Author:  Chris Nandor, pudge@pobox.com
+
+# see tpc_2001_presentation.txt for a sample input file
+# written with MacPerl to work as a droplet, because MacPerl is
+# cool.  works with any other perl from the command line.
+# 
+# thanks to Rocco Caputo for super-fresh HTML/CSS
+# formatting help and other patches.
+
+# Considerable hacking by Richard Dice, rdice@pobox.com,
+# to include support for --help, -h, --frames, --table
+# command line arguments and their corresponding modes
+# within the program; these sections noted with "RLD"
+# string.  (Without RLD markers, I also turned <<EOT
+# instances to <<"EOT", and added a ; on new lines
+# following the terminating EOTs. (It's cperl-mode-aliscious!)
+# (but now makes BBEdit a little bit unhappy ...
+# I'll live with it ... *sob*)
+
+use File::Basename;
+use File::Copy;
+use File::Spec::Functions;
+use URI;
+use strict;
+
+use vars qw($VERSION $HEAD);
+my(%data, %files);
+local *F;
+local *FRAMESET;   # RLD
+($VERSION) = ' $Revision: 1.3 $ ' =~ /\$Revision:\s+([^\s]+)/;
+
+#################################################################
+# RLD - print out usage message if there are no command line
+# arguments (including file names) or the 0-th command line
+# argument suggests that the user is seeking help
+if ( 0 == @ARGV
+     or '-h' eq $ARGV[0]
+     or '--help' eq $ARGV[0] ) {
+
+    print STDERR "Usage: ./makeslides [ --frames | --table ] filename\n";
+    print STDERR "Default is --frames\n";
+    exit 0;
+}
+
+#################################################################
+# RLD - check command line arguments to see if '--frames' or
+# '--table' is specified, generate output files with this in
+# mind (defaults to --table)
+my $MODE = 'frames';
+if ( $ARGV[0] eq '--table' ) {
+    $MODE = 'table';
+    shift @ARGV;      # pull the flag off of the @ARGV
+} elsif ( $ARGV[0] eq '--frames' ) {
+    $MODE = 'frames'; # not strictly necessary
+    shift @ARGV;      # pull the flag off of the @ARGV
+} else {
+    # do nothing, as the 0-th command line arg isn't a
+    # flag to set table or frames mode
+}
+
+#################################################################
+# get init data
+# the first few lines of your file have specific data in them
+my $filename = $ARGV[0];
+chomp(my $mttl = <>);   # Title of Talk
+
+# Hold on a second!  The first line may be an emacs directive.  If it
+# is, shift everything down a line.
+chomp($mttl = <>) if $mttl =~ /-\*-.*-\*-/;
+
+chomp(my $mwht = <>);   # Event Name
+chomp(my $mwhu = <>);   # Event URL
+chomp(my $mdte = <>);   # Event Date
+chomp(my $mwho = <>);   # Presenter Names
+
+#################################################################
+# setup
+my $pre = 'pre';  # what to use for "pre" tags
+my($file, $dir, $suf) = fileparse($filename, '\.txt');
+my $ndir = $dir . $file;
+
+#################################################################
+# create directory; must not already exist
+mkdir $ndir, 0777 or die "Can't create `$ndir': $!";
+chdir $ndir or die "Can't chdir `$ndir': $!";
+
+#################################################################
+# CSS file: name it $inputfile.css, else we use the CSS
+# data in DATA
+my $oldstyle = catfile(updir, "$file.css");
+
+if (-e $oldstyle) {
+    copy($oldstyle, 'styles.css') or die $!;
+} else {
+    local *STYLES;
+    open(STYLES, ">styles.css") or die "Can't create `styles.css': $!";
+    print STYLES <DATA>;
+    close STYLES;
+}
+
+#################################################################
+# parse file into data structure
+# 
+# slide titles begin at column 1 with nonspace data
+# 
+# slides then have first-level headers, with optional
+# second-level headers
+# 
+# first-level should be indented with one tab, second with two
+# tabs, with "* " as the first characters after the tabs
+# 
+# to denote an entire section of code, begin with "<pre> " right
+# after the "* ", followed by the code
+my($n, $p);
+while (<>) {
+    last if /^__END__$/;  # embed comments at the end
+
+    if (/^\S/) {
+        chomp;
+        $data{++$n}{head} = $_;
+        $p = 0;
+    } elsif (/^(?: {4}| {8}|\t)\* (<$pre>\s?)?(.*)$/s) {
+        ++$p;
+        push @{$data{$n}{$p}}, "<$pre>" if $1;
+        push @{$data{$n}{$p}}, $2;
+    } elsif ($n && $p) {
+        push @{$data{$n}{$p}}, $_;
+    }
+}
+
+#################################################################
+# make pages
+# this breaks down our data from the %data hash and creates pages
+# note the following pseudocode:
+#       * create HREF links with [LINK "URL" "LABEL"]
+#       * URLs will be matched and converted to HREFs automatically
+#       * stuff in C<> will be wrapped in <tt></tt>
+#       * lines starting with <pre> will have </pre> added at the end
+#         automatically
+foreach my $key (sort num keys %data) {
+    my(@items, $head);
+
+    $head = delete $data{$key}{head};
+
+    foreach my $field (sort num keys %{$data{$key}}) {
+        my $fref = $data{$key}{$field};
+        my $text = '<li>';
+
+        if ($fref->[1] && $fref->[1] =~ /^\t\t\* /) {
+            $text .= shift @$fref;
+            $text .= "<ul><li>";
+            for (@$fref) {
+                s|^\t\t\* |</li>\n\t<li>|;
+                $text .= $_;
+            }
+            $text =~ s|<ul><li>\n*</li>|<ul>|g;
+            $text .= "</li>\n</ul>";
+        } else {
+            $text .= join('', @$fref);
+        }
+
+        $text =~ s/\s+$//s;
+        $text =~ s/&(?!#?[a-zA-Z0-9]+;)/&amp;/g;
+
+        $text =~ s|C<(.+?)>|<tt>$1</tt>|gs;
+        $text =~ s|\[LINK "(.+?)" "(.+?)"\]|<a href="./$1">$2</a>|g;
+
+        if (grep {/<$pre>/} @{$fref}) {
+            $text .= "</$pre>\n</li>\n";
+        } else {
+            $text .= "\n</li>\n";
+        }
+        $text =~ s!((?:<URL:)?((?:mailto:|(?:https?|ftp)://)[^\s\)>]+)>?)!<a href="$2">$1</a>!gs;
+
+        push @items, $text;
+    }
+
+    my $file = sprintf "slide%3.3d.html", $key;
+    $files{$file} = {
+        items   => \@items,
+        head    => $head,
+    };
+}
+
+my @files = sort keys %files;
+my $otherhead = <<"EOT";
+    <link rel="Stylesheet"  href="./styles.css"     type="text/css" />
+    <link rel="Start"       href="./index.html"     title="$mttl" />
+    <link rel="Contents"    href="./toc.html"       title="Table of Contents" />
+    <link rel="First"       href="./$files[0]"  title="$files{$files[0]}{head}" />
+    <link rel="Last"        href="./$files[-1]"  title="$files{$files[-1]}{head}" />
+EOT
+;
+
+for my $i (0 .. $#files) {
+    $otherhead .= <<"EOT";
+    <link rel="Chapter"     href="./$files[$i]"  title="$files{$files[$i]}{head}" />
+EOT
+    ;
+}
+
+chomp($otherhead);
+
+#################################################################
+# parse out the code from after __END__ ... each bit of code
+# will be denoted with a line like __CODE_this_is_my_code__ which
+# will create a file called "this_is_my_code.html", which can
+# be linked to from another slide with:
+#    [LINK "this_is_my_code.html" "Click Here For My Code"]
+my($code, $codename);
+unless (eof) {
+    while (<>) {
+        if (/^__CODE_(\w+)__$/) {
+            savecode($code, $codename) if $codename;
+            $codename = $1;
+            $code = "";
+        } else {
+            $code .= $_;
+        }
+    }
+}
+savecode($code, $codename) if $codename;
+
+sub savecode {
+    my($code, $codename) = @_;
+
+    $code =~ s/&/&amp;/g;
+    $code =~ s/</&lt;/g;
+    $code =~ s/>/&gt;/g;
+
+    $code =~ s/\n/<br \/>/gi;  # pp breaks
+    $code =~ s/(?:<br \/>\s*){2,}<br \/>/<br \/><br \/>/gi;
+    $code =~ s/\t/    /g;  # can mess up internal tabs, oh well
+
+    $code =~ s{((?:  )+)(?: (\S))?} {
+        ("&nbsp; " x (length($1)/2)) .
+        ($2 ? "&nbsp;$2" : "")
+    }eg;
+
+    open(F, ">" . $codename . ".html") or die "Can't create `$codename.html': $!";
+    print F <<"EOT";
+$HEAD
+<head>
+    <title>Code: $codename</title>
+$otherhead
+</head>
+<body class="codepage">
+<blockquote><p class="codepage"><tt>
+$code
+</tt></p></blockquote>
+</body>
+</html>
+EOT
+    ;
+    close(F);
+}
+
+#################################################################
+# print pages
+# actually save the pages out to files, adding in headers and footers
+# and LINK tags with the right things in them
+for my $i (0 .. $#files) {
+    my $file = $files[$i];
+
+    #################################################################
+    # RLD - serious modifications here, to figure out what files to
+    # output and with what content based on $MODE value
+    if ( $MODE eq 'frames' ) {
+
+        open(FRAMESET, "> " . $file);
+        print FRAMESET <<"EOT";
+<html>
+
+<head>
+    <title>$files{$files[$i]}{head}</title>
+</head>
+
+<frameset rows="*,140">
+
+    <frame src="frame_a_$file">
+    <frame src="frame_b_$file">
+
+</frameset>
+
+</html>
+EOT
+        ;
+        close(FRAMESET);
+
+        $filename = 'frame_a_' . $file;
+
+    } elsif ( $MODE eq 'table' ) {
+        $filename = $file;
+    } else {
+        die "Can't happen! ";
+    }
+
+    # it used to be $file, now it's $filename -- RLD
+    open(F, "> " . $filename) or die "Can't create `$filename': $!";
+
+    my(%prev, %next);
+    if ($i > 0) {
+        $prev{head} = <<"EOT";
+    <link rel="Prev"        href="./$files[$i-1]"  title="$files{$files[$i-1]}{head}" />
+EOT
+        ;
+        $prev{foot} = <<"EOT";
+<a class="td" href="./$files[$i-1]">&lt; $files{$files[$i-1]}{head}</a><br />
+EOT
+        ;
+    }
+
+    if ($files[-1] ne $file) {
+        $next{head} = <<"EOT";
+    <link rel="Next"        href="./$files[$i+1]"  title="$files{$files[$i+1]}{head}" />
+EOT
+        ;
+        $next{foot} = <<"EOT";
+<a class="td" href="./$files[$i+1]">$files{$files[$i+1]}{head} &gt;</a><br />
+EOT
+        ;
+    }
+
+    # Leave space for missing heads or feet so the back and
+    # forward links are always on the same lines in the page
+    # footer.
+    $prev{head} ||= '';
+    $next{head} ||= '';
+    $prev{foot} ||= '<br />';
+    $next{foot} ||= '<br />';
+
+    print F <<"EOT";
+$HEAD
+<head>
+    <title>$mttl - $files{$file}{head}</title>
+$otherhead
+$prev{head}$next{head}</head>
+<body>
+
+<table class="main">
+    <tr>
+        <td valign="top">
+
+<h1>$files{$file}{head}</h1>
+EOT
+    ;
+
+    print F "\n<ul>\n\n", join("\n", @{$files{$file}{items}}), "\n</ul>\n";
+
+    ####################################################################
+    # RLD -- factor out some common HTML code into $footer and $ending
+    my $footer = <<"EOT";
+<table class="navigation" border="0" cellpadding="2">
+    <tr class="navigation">
+        <td class="navigation" align="left"><br />
+$prev{foot}$next{foot}
+<a class="td" href="./toc.html">Table of Contents</a> |
+<a class="td" href="./$files[$i]">Page ${\($i+1)}</a>
+        </td>
+
+        <td class="navigation" align="right">
+<em><a class="td" href="$mwhu">$mwht</a></em><br />
+    $mdte<br />
+<strong><a class="td" href="./index.html">$mttl</a></strong><br />
+$mwho
+        </td>
+    </tr>
+</table>
+EOT
+    ;
+
+    my $ending = <<"EOT";
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>
+EOT
+    ;
+
+    ###################################################################
+    # RLD -- another section that depends on the $MODE value
+    if ( $MODE eq 'frames' ) {
+
+        print F $ending;
+        close F;
+
+        open(F, "> frame_b_" . $file)
+            or die "Can't create `frame_b_$file': $!";
+
+        print F <<"EOT";
+$HEAD
+<head>
+    <title>$mttl - $files{$file}{head}</title>
+    <base target="_top">
+    <link rel="Stylesheet"      href="./styles.css"     type="text/css" />
+    <link rev="Start"           href="./index.html"     title="$mttl" />
+    <link rev="Contents"        href="./toc.html"       title="Table of Contents" />
+$prev{head}$next{head}</head>
+<body>
+
+<table height="100%" width="100%">
+    <tr>
+        <td valign="bottom" width="100%">
+            $footer
+            $ending
+EOT
+        ;
+
+        close(F);
+
+    } elsif ( $MODE eq 'table' ) {
+
+        print F <<"EOT";
+
+        </td>
+    </tr>
+    <tr>
+        <td valign="bottom">
+
+            $footer
+            $ending
+EOT
+        ;
+
+        close(F);
+
+    } else {
+        die "Can't happen! ";
+    }
+}
+
+#################################################################
+# print our index page, which is just a big page with stuff in it
+open(F, "> index.html") or die "Can't create index.html: $!";
+print F <<"EOT";
+$HEAD
+<head>
+    <title>$mttl</title>
+$otherhead
+    <link rel="Next"        href="./$files[0]"  title="$files{$files[0]}{head}" />
+</head>
+<body class="indexpage">
+
+<table width="100%" height="100%">
+    <tr>
+        <td width="100%" height="100%" align="center" valign="middle">
+
+<h1 class="indexpage">$mttl</h1>
+
+<h2 class="indexpage">$mwht</h2>
+<h3 class="indexpage">$mdte</h3>
+
+<h3 class="indexpage">$mwho</h3>
+
+<p class="indexpage"><em><a href="./slide001.html">Begin</a></em></p>
+
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>
+EOT
+;
+close(F);
+
+#################################################################
+# create table of contents page
+open(F, "> toc.html") or die "Can't create toc.html: $!";
+print F <<"EOT";
+$HEAD
+<head>
+    <title>$mttl - Table of Contents</title>
+    <link rel="Stylesheet" href="./styles.css" type="text/css" />
+</head>
+<body>
+
+<table height="100%" width="100%">
+    <tr>
+        <td valign="top" width="100%">
+
+<h1>$mttl - Table of Contents</h1>
+
+<ol>
+EOT
+;
+for my $file (sort keys %files) {
+    print F qq[<li><a href="./$file">$files{$file}{head}</a></li>\n];
+}
+print F "</ol>\n";
+
+print F <<"EOT";
+        </td>
+    </tr>
+    <tr>
+        <td valign="bottom" width="100%">
+
+<table class="navigation" border="0" cellpadding="2" cellspacing="2" width="100%">
+    <tr>
+        <td class="navigation" align="left"><br /><br /><br />
+<a class="td" href="./toc.html">Table of Contents</a>
+        </td>
+
+        <td class="navigation" align="right">
+<em><a class="td" href="$mwhu">$mwht</a></em><br />
+    $mdte<br />
+<strong><a class="td" href="./index.html">$mttl</a></strong><br />
+$mwho
+        </td>
+    </tr>
+</table>
+
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>
+EOT
+;
+close(F);
+
+#################################################################
+# a few leftovers
+
+sub num {$a <=> $b}
+
+BEGIN {
+    # the standard header + doctype etc.
+    # ?xml? is optional, basically, and MSIE chokes on it when reading
+    # a file locally with this in it, so i leave it out
+    #<?xml version="1.0"?>
+    chomp($HEAD = <<'EOT');
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/2000/REC-xhtml1-20000126/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<script type="text/javascript" language="Javascript" charset="iso-8859-1">
+<!--
+if (navigator.appName.indexOf("Microsoft") != -1) {
+    document.onkeypress = function (evt) {
+        var nav = document.all.tags('link');
+        var c = document.layers ? evt.which
+              : document.all ? event.keyCode
+              : evt.keyCode;
+        var find = key_map(c);
+        for (i = 0 ; i < nav.length ; i++) {
+            if (nav[i].rev == find) {
+                location = nav[i].href;
+            }
+        }
+        return true;
+    };
+}
+
+function key_map (key) {
+    switch(key) {
+        case 83:
+        case 115:
+            return 'Start';
+        case 32:
+        case 78:
+        case 108:
+        case 110:
+            return 'Next';
+        case 67:
+        case 99:
+        case 107:
+            return 'Contents';
+        case 80:
+        case 106:
+        case 112:
+            return 'Prev';
+    }
+}
+//-->
+</script>
+EOT
+    ;
+}
+
+__END__
+body, ul, ol, p         {
+    background-color: #DDDDDD;
+    color: #222222;
+    font-family: Verdana, Helvetica, Arial, sans-serif;
+}
+
+tt, pre                 {
+    font-family: Monaco, Courier, monospace;
+    font-size: 20pt;
+    font-weight: normal;
+}
+
+table.main              {
+    width: 100%;
+    height: 95%;
+    border-style: none;
+}
+
+table.navigation        {
+        background-color: #000066;
+        width: 100%;
+        height: auto;
+}
+
+td.navigation           {
+        color: #FFFFFF;
+        vertical-align: top;
+        font-size: 20pt;
+        font-family: Verdana, Helvetica, Arial, sans-serif;
+}
+
+h1, h2, h3, table       {
+        font-family: Verdana, Helvetica, Arial, sans-serif;
+}
+
+body, p         { font-size: 20pt }
+h1              { font-size: 36pt }
+h2              { font-size: 32pt }
+h3              { font-size: 20pt }
+ul, li, ol      { font-size: 26pt }
+li              { padding-bottom: 8pt }
+
+.codepage       { background-color: #FFFFFF }
+
+.indexpage      { text-align: center }
+p.indexpage     { font-size: 42pt }
+h1.indexpage    { font-size: 58pt }
+h2.indexpage    { font-size: 42pt }
+h3.indexpage    { font-size: 28pt }
+
+a:visited, a:active     {
+        color: #222222;
+        text-decoration: none;
+}
+
+a:link                  {
+        color: #222222;
+        text-decoration: underline;
+}
+
+a:hover                 {
+        color: #660000;
+        text-decoration: underline;
+}
+
+a.td:link, a.td:visited, a.td:active    {
+        color: #FFFFFF;
+}
+
+a.td:hover              {
+        color: #DDDDDD;
+}

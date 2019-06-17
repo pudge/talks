@@ -1,0 +1,72 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN"
+			"http://www.w3.org/TR/REC-html40/strict.dtd">
+<HTML>
+<HEAD>
+<TITLE>MacPerl 5.6: Threads &amp; Fork</TITLE>
+
+<!--
+Created on    : Sunday, April 11, 1999
+Last modified : Saturday, December 30, 2000
+by            : Pudge, pudge@pobox.com
+with          : BBEdit and MacPerl
+filename      : /macperl/yapc/19100/macperl56/slides007.html
+-->
+
+<LINK REL=STYLESHEET TYPE="text/css" HREF="styles.css">
+</HEAD>
+
+<BODY>
+
+<H1>Threads &amp; Fork</H1>
+
+
+
+<UL>
+
+<LI>Single process with multiple threads (5005threads?)
+</LI>
+
+
+<LI>Multiple "applications" in a single process (ithreads?)
+</LI>
+
+
+<LI>Mac OS only allows one instance of a given "physical"
+		application to run at a time
+</LI>
+
+
+<LI>LWP/HWT (light-weight process, heavy-weight thread):
+		threads with their own fd table and sfio environment
+</LI>
+
+
+<LI>"Win32" fork() emulation
+</LI>
+
+
+<LI>Details very sketchy right now
+</LI>
+
+
+<LI>Another possibility: MacPerl shared library could be accessed
+		by multiple smaller processes, so multiple
+		simultaneous perl programs could run
+</LI>
+
+
+</UL>
+
+<P>[<A HREF="./index.html">Main</A>] [<A HREF="./slides006.html">Prev</A>] [<A HREF="./slides008.html">Next</A>]
+
+</P>
+
+<HR>
+<ADDRESS>
+Chris Nandor, Andover.Net / yapc 19100 / MacPerl 5.6 / 22 June 19100
+</ADDRESS>
+
+<P><SMALL><EM>&copy; 19100, All Rights Reserved.</EM></SMALL></P>
+
+</BODY>
+</HTML>

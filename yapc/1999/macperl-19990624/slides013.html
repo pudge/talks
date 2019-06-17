@@ -1,0 +1,74 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+                        "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+<TITLE>Using Mac::Glue</TITLE>
+
+<!--
+Created on    : Monday, June 21, 1999
+Last modified : Friday, October 08, 1999
+by            : Pudge, pudge@pobox.com
+with          : BBEdit and MacPerl
+filename      : /macperl/yapc/1999/macperl-19990624/slides013.html
+-->
+
+<LINK REL=STYLESHEET TYPE="text/css" HREF="styles.css">
+</HEAD>
+
+<BODY>
+
+<TABLE BORDER=0 CELLPADDING=8 WIDTH="100%">
+<TR><TD ALIGN="CENTER">
+<H3>MacPerl and the Elements of the Wild</H3>
+<STRONG>yet another perl conference</STRONG> -- <EM>June 24, 1999</EM><BR>
+Chris Nandor, mailto:pudge@pobox.com, http://pudge.net/
+
+<P>[<A HREF="./index.html">Main</A>] [<A HREF="./slides012.html">Prev</A>] [<A HREF="./slides014.html">Next</A>]
+
+</P>
+
+</TD></TR></TABLE>
+
+<H2>Using Mac::Glue</H2>
+
+
+
+<UL>
+
+<LI>Call <TT>new</TT> constructor with name of glue
+<BR><BR></LI>
+
+
+<LI>Apple events are called as object methods
+<BR><BR></LI>
+
+
+<LI>Event parameters are passed as key-value pairs,
+        though direct object parameter if first in list
+        doesn't need key
+<BR><BR></LI>
+
+
+<LI>Results returned from call, error put into <TT>$^E</TT>
+<BR><BR></LI>
+
+
+<LI>Example: <PRE>
+    #!perl -wl
+    use Mac::Glue;
+    $sherlock = new Mac::Glue 'Sherlock';
+    $sherlock-&gt;activate;
+    @urls = $sherlock-&gt;search_internet('AltaVista', For =&gt; 'yapc');
+    die $^E if $^E;
+    $sherlock-&gt;quit;
+    print join "\n", sort @urls;
+</PRE>
+</LI>
+
+
+</UL>
+
+<P><SMALL><EM>&copy; 1999.  All Rights Reserved.</EM></SMALL></P>
+
+</BODY>
+</HTML>

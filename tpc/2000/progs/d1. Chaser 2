@@ -1,0 +1,1482 @@
+#!perl -w
+
+# Chaser v2.0
+# by Kevin Reid <kpreid@ibm.net>
+#
+# Use the mouse to drive around and catch the moving objects.
+# Click to fire iceballs that turn them into non-moving objects (temporarily).
+# Don't run into walls.
+# Press Caps Lock to pause or abort.
+#
+# If you see a bright red square in the upper-left
+# corner, then the game is running slower than it should.
+#
+# Performance tips:
+#  1. Quit some applications.
+#  2. Reduce color depth.
+#  3. Get a faster Mac.
+# 
+# Revision history
+# 2.0
+#   * Code structure completely rearranged
+#   * Added difficulty settings
+#   * Added high-score list
+#   * Added menu for start/quit/highscores
+#   * Targets now have upper limits on velocity
+#   * Targets wiggle more
+#   * Added support for non-orthogonal level elements
+#   * Added gun charge bar
+#   * Level rearranged
+#   * Added pause function
+#   * Added demo mode
+# 1.2
+#   * Fixed bug in display of health bar when resolution was not 800x600.
+#   * Slight change to win animation.
+# 1.1
+#   * Added win animation.
+#   * Added random background color.
+#   * Minor efficency improvements.
+#   * You no longer get damaged for hitting a wall with a velocity under 2.
+#   * Damage flash now varies with intensity of damage.
+#   * Shot firing added.
+# 1.0.1
+#   * Fixed handling of absence of ColorGamma module.
+# 1.0
+#   * First release.
+
+
+use strict;
+use Mac::QuickDraw;
+use Mac::Windows;
+use Mac::Events;
+use Mac::Controls;
+use Mac::Fonts;
+use Mac::Files;
+use MacPerl;
+
+# uncomment all occurences of "use Mac::KTools" and comment
+#   out block if you have the module
+# use Mac::KTools qw(/^FS_/ /^Gradient_/);
+{
+  local $/;
+  no strict;
+  eval <DATA>;
+  import Mac::KTools qw(/^FS_/ /^Gradient_/);
+  {package GButton; import Mac::KTools qw(ClickRect)};
+  {package GSlider; import Mac::KTools qw(ClickRect)};
+  {package TextGradient; import Mac::KTools qw(/^Gradient_/)};
+}
+
+use vars qw(
+  $Done $Width $Height
+        $CenterX $CenterY $CenterPt
+  $Clicked $OldCStr $StartTime
+  $BlipRect $prefile $Paused
+  $CharTyped
+
+  $MinSpd $GunCRate @DiffStrings $DiffText
+
+  $GameRect $GameRegion
+  $LevRegion
+  $DrawRegion
+  @MulTab @InvMulTab
+
+  $PlayerX $PlayerY $PlayerAng
+  $PlayerVel $Health
+  
+  @ObjMov $TRemain
+  @Shots $GunCharge
+
+  $Won $WScale $Frame
+  $Lost
+
+  @HighScores $GotHigh $GotHighScore
+
+  $IsDemo
+  $Demo_TargInFront
+  $Demo_VelGoal
+  $Demo_AngGoal
+);
+
+use constant VWIDTH => 200;
+use constant VHEIGHT => 150;
+
+use constant COL_BACKGROUND => new RGBColor((0)x3);
+
+use constant COL_FLOOR => new RGBColor( @{([10100,0,0], [0,5000,0], [0,0,8000])[rand 3]} );
+use constant COL_WALL => new RGBColor((32768)x3);
+use constant COL_PLAYER => new RGBColor((65535)x3);
+use constant COL_TARGET => new RGBColor((65535)x3);
+
+use constant COL_HEALTHFG => new RGBColor (16384, 16384, 65535);
+use constant COL_HEALTHBG => new RGBColor (5000, 0, 0);
+use constant COL_GUNFG => new RGBColor (65535, 50000, 50000);
+use constant COL_GUNBG => new RGBColor (6000, 0, 10000);
+use constant COL_GUNLOW => new RGBColor (40000, 20000, 65535);
+use constant COL_TEXT => new RGBColor((65535)x3);
+use constant COL_TEXTSHAD => new RGBColor((20000)x3);
+use constant COL_SPEEDBLIP => new RGBColor (65535, 0, 0);
+
+######## Initialization #####################################################################################################################
+
+($CenterX, $CenterY) = map $_ / 2, ($Width, $Height) = FS_Start();
+$CenterPt = new Point ($CenterX, $CenterY);
+
+CompileLevel(
+  [[-500, -300], [-50, -300], [-50, -600], [50, -600], [50, -300], [500, -300], [500, 300], [50, 300], [50, 600],
+   [-50, 600], [-50, 300], [-500, 300]],
+  r2p(-400, -200, -100, 200),
+  r2p(100, -200, 400, 200),
+  [[0, -60], [50, 0], [0, 60], [-50, 0]],
+);
+
+FS_Hook(click => sub {$Clicked = 1});
+FS_Hook(key => sub {$CharTyped = chr($_[0]); $Clicked = 1});
+FS_Hook(idle => sub {
+  $Paused = $Mac::Events::CurrentEvent->modifiers & (alphaLock | shiftKey)
+    if $Mac::Events::CurrentEvent->what == nullEvent;
+});
+  
+SetPort FS_Port();
+$GameRect = new Rect ($CenterX - VWIDTH, $CenterY - VHEIGHT, $CenterX + VWIDTH, $CenterY + VHEIGHT);
+$BlipRect = new Rect ($CenterX - VWIDTH, $CenterY - VHEIGHT, $CenterX - VWIDTH + 5, $CenterY - VHEIGHT + 5);
+$GameRegion = NewRgn;
+RectRgn $GameRegion, $GameRect;
+
+@DiffStrings = split /\n+/, <<'EOS';
+Boring
+Child's play
+
+Easy
+Medium
+Difficult
+
+Challenge
+Impossible
+EOS
+
+$MinSpd = 2;
+$GunCRate = 5;
+
+@HighScores = (
+  ['Sadguk', 2034],
+  ['Arald', 1402],
+  ['Jark', 1382],
+  ['Jaerl', 1120],
+  ['Chagra', 823],
+  ['Senif', 818],
+  ['Qarkle', 760],
+  ['Dalf', 533],
+  ['Gwork', 230],
+  ['Flakaw', -34],
+);
+
+$prefile = FindFolder(kOnSystemDisk, kPreferencesFolderType)
+ . ":Chaser Preferences";
+require $prefile if -e $prefile;
+
+######## Main loop #####################################################################################################################
+
+while (1) {
+  my $choice = MainMenu();
+  last if $choice eq 'Quit';
+  {no strict 'refs'; &$choice;}
+}
+
+open PREFS, "> $prefile" or die "couldn't open prefs file for writing: $!";
+print PREFS <<"EOP";
+# This file is rewritten each time Chaser is run.
+# Changes to anything other than the preference values
+#   will be lost.
+
+\$MinSpd = $MinSpd;
+\$GunCRate = $GunCRate;
+\@HighScores = (
+  @{[map {"[q`$$_[0]`, $$_[1]],\n "} @HighScores]}
+);
+1;
+EOP
+close PREFS;
+MacPerl::SetFileInfo('McPL', 'TEXT', $prefile);
+
+FS_Stop();
+exit;
+
+END {
+  ShowCursor;
+  DisposeRgn $DrawRegion if $DrawRegion;
+  DisposeRgn $LevRegion if $LevRegion;
+  DisposeRgn $GameRegion if $GameRegion;
+}
+
+######## Menu #####################################################################################################################
+
+sub MainMenu {
+  my $demostart = time + 25;
+  my $grad = new TextGradient (
+    Window => FS_Win(),
+    Text => 'Chaser 2',
+    X => $CenterX,
+    Y => $CenterY - 160,
+    Font => GetFNum('Impact') || GetFNum('Techno') || 0,
+    Size => 60,
+  );
+  my $action;
+  my $qbut = new GButton (new Rect ($CenterX - 40, $CenterY + 180, $CenterX + 40, $CenterY + 200), "Quit", sub { $action = 'Quit' });  
+  my $dbut = new GButton (new Rect ($CenterX - 40, $CenterY - 100, $CenterX + 40, $CenterY - 80), "Play Game", sub { $action = 'PlayGame' });
+  my $pbut = new GButton (new Rect ($CenterX - 40, $CenterY - 80, $CenterX + 40, $CenterY - 60), "Demo", sub { $action = 'PlayDemo' });
+  my $hbut = new GButton (new Rect ($CenterX - 40, $CenterY + 120, $CenterX + 40, $CenterY + 140), "High Scores", sub { $action = 'Scores' })
+    if @HighScores;
+  my $s_spd = new GSlider (new Rect ($CenterX - 80, $CenterY - 10, $CenterX + 80, $CenterY + 10), "Minimum Speed", 0, 8, $MinSpd, sub {
+    $MinSpd = $_[0];
+    UpdateDiffString();
+  });
+  my $s_gnc = new GSlider (new Rect ($CenterX - 80, $CenterY + 15, $CenterX + 80, $CenterY + 35), "Gun Charge Rate", 0, 10, $GunCRate, sub {
+    $GunCRate = $_[0];
+    UpdateDiffString();
+  });
+  my $difflab = new GTextBox (new Rect ($CenterX - 80, $CenterY - 30, $CenterX + 80, $CenterY - 15), 'Difficulty Options');
+  $DiffText = new GTextBox (new Rect ($CenterX - 80, $CenterY + 40, $CenterX + 80, $CenterY + 55), '');
+
+  my @elems = ($qbut, $pbut, $dbut, (@HighScores ? $hbut : ()), $s_spd, $s_gnc, $difflab, $DiffText);
+  foreach (@elems) { FS_Win()->add_pane($_) }
+  UpdateDiffString();
+  while (!$action) {
+    WaitNextEvent;
+    $action = 'PlayDemo' if time >= $demostart;
+  }
+  foreach ($grad, @elems) { FS_Win()->remove_pane($_) }
+  $action;
+}
+
+sub Difficulty {
+  #($MinSpd / 8) - ($GunCRate / 40);
+  ($MinSpd / 16) - ($GunCRate / 20) + .5;
+  #$MinSpd / ($GunCRate + .1);
+}
+
+sub UpdateDiffString {
+  my $diff = my $adiff = Difficulty;
+  $diff = 0 if $diff < 0;
+  $diff = 1 if $diff > 1;
+  $DiffText->SetText($DiffStrings[($diff * $#DiffStrings) + .5]);
+}
+
+######## Game #####################################################################################################################
+
+sub Play {
+  InitGame();
+  my $cticks = 0;
+  while (!$Done) {
+    next if TickCount() < $cticks;
+    if (TickCount() > $cticks) {
+      RGBForeColor(COL_SPEEDBLIP);
+      PaintRect $BlipRect;
+    }
+    $cticks = TickCount() + 2;
+    IterGame();
+    WaitNextEvent(0) unless $Frame % 7;
+    if ($Paused) {last if Pause()}
+  }
+  CleanupGame();
+}
+
+sub Pause {
+  my $ptxt = new TextGradient (
+    Window => FS_Win(),
+    Text => '- paused -',
+    X => $CenterX,
+    Y => $CenterY,
+    Font => geneva,
+    Size => 24,
+  );
+  my $action;
+  my $qbut = new GButton (new Rect ($CenterX - 40, $CenterY + 120, $CenterX + 40, $CenterY + 140), "Abort", sub { $action = 'Menu' });
+  FS_Win()->add_pane($qbut);
+  ShowCursor;
+  WaitNextEvent while $Paused and !$action;
+  FS_Win()->remove_pane($ptxt);
+  FS_Win()->remove_pane($qbut);
+  return 1 if $action;
+  SetMouse($CenterPt);
+  WaitNextEvent;
+  HideCursor;
+  SetPort FS_Port();
+  ClipRect($GameRect);
+  ValidRect(FS_Port()->portRect);
+  return 0;
+}
+
+sub PlayDemo {
+  $IsDemo = 1;
+  Play();
+}
+
+sub PlayGame {
+  $IsDemo = 0;
+  Play();
+}
+
+sub InitGame {
+  $PlayerAng = .01;
+  $PlayerY = 260;
+  $PlayerX = -400;
+  $PlayerVel = 0;
+  $Health = 100;
+  $GunCharge = 0;
+  @Shots = ();
+  SetMouse($CenterPt);
+  $Won = 0; $WScale = 1;
+  $Lost = 0;
+
+  @ObjMov = (
+    {'y' => -250, 'x' => 450, yv => 3, xv => 2, draw => 1, frozen => 0},
+    {'y' => 250, 'x' => 450, yv => 3, xv => 2, draw => 1, frozen => 0},
+    {'y' => -250, 'x' => -450, yv => 3, xv => 2, draw => 1, frozen => 0},
+    {'y' => 250, 'x' => -450, yv => 3, xv => 2, draw => 1, frozen => 0},
+    {'y' => 0, 'x' => 50, yv => 3, xv => 2, draw => 1, frozen => 0},
+
+    {'y' => 550, 'x' => 0, yv => 3, xv => 2, draw => 1, frozen => 0},
+    {'y' => -550, 'x' => 0, yv => 3, xv => 2, draw => 1, frozen => 0},
+  );
+  $TRemain = @ObjMov;
+
+  SetPort FS_Port();
+  RGBBackColor(COL_BACKGROUND);
+  EraseRect FS_Port()->portRect;
+  ValidRect FS_Port()->portRect;
+  ClipRect $GameRect;
+
+  $StartTime = time;
+  $Frame = $Done = 0;
+  DrawHealthBar();
+  DrawTargetsBar();
+  HideCursor;
+
+  if ($IsDemo) {
+    $Clicked = 0;
+    $Demo_AngGoal = 0;
+    $Demo_VelGoal = 0;
+  }
+}
+
+sub CleanupGame {
+  SetPort FS_Port();
+  ClipRect(FS_Port()->portRect);
+  InvalRect(FS_Port()->portRect);
+  ShowCursor;
+  HighScoreEntry() unless $IsDemo;
+  Scores() if $GotHigh;
+  $GotHigh = $Health = 0;
+}
+
+sub IterGame {
+  $Frame++;
+  SetPort FS_Port();
+  $DrawRegion = GetDrawRgn();
+  RGBForeColor(COL_WALL);
+  {
+    my $r = XorRgn($DrawRegion, $GameRegion);
+    PaintRgn $r;
+    DisposeRgn $r;
+  }
+  RGBForeColor(COL_FLOOR);
+  PaintRgn $DrawRegion;
+  RGBForeColor(COL_PLAYER);
+  if ($IsDemo) {
+    MoveTo($CenterX - VWIDTH+3, $CenterY + VHEIGHT-3);
+    DrawString "demo - click or press a key to end";
+  }
+  if ($Lost) {
+    MoveTo($CenterX +  0*$WScale + $Lost, $CenterY + -10*$WScale - $Lost/2);
+    LineTo($CenterX +  5*$WScale + $Lost, $CenterY +  10*$WScale - $Lost/2);
+    MoveTo($CenterX +  5*$WScale - $Lost/2, $CenterY +  10*$WScale + $Lost);
+    LineTo($CenterX + -5*$WScale - $Lost/2, $CenterY +  10*$WScale + $Lost);
+    MoveTo($CenterX + -5*$WScale - $Lost, $CenterY +  10*$WScale);
+    LineTo($CenterX +  0*$WScale - $Lost, $CenterY + -10*$WScale);
+  } else {
+    MoveTo($CenterX +  0*$WScale, $CenterY + -10*$WScale);
+    LineTo($CenterX +  5*$WScale, $CenterY +  10*$WScale);
+    LineTo($CenterX + -5*$WScale, $CenterY +  10*$WScale);
+    LineTo($CenterX +  0*$WScale, $CenterY + -10*$WScale);
+  }
+  foreach (@ObjMov) {
+    next unless $$_{draw};
+    my $f = (65535 - $$_{frozen} * 500);
+    $f = 0 if $f < 0;
+    RGBForeColor(new RGBColor(($f)x2, 65535));
+    my @p = MakePoint($$_{'x'}, $$_{'y'});
+    FrameOval new Rect($p[0]-5, $p[1]-5, $p[0]+5, $p[1]+5);
+  }
+  foreach (@Shots) {
+    RGBForeColor($$_{color});
+    my @p = MakePoint($$_{'x'}, $$_{'y'});
+    PaintOval new Rect($p[0]-2, $p[1]-2, $p[0]+2, $p[1]+2);
+  }
+  if ($Won) {
+    for (1..3*$WScale) {
+      RGBForeColor(new RGBColor(rand 65535, rand 65535, rand 65535));
+      my @p = ($CenterX + rand(10 * $WScale) - 5 * $WScale, $CenterY + rand (10 * $WScale) - 5 * $WScale);
+      PaintOval new Rect($p[0]-2, $p[1]-2, $p[0]+2, $p[1]+2);
+    }
+  }
+
+  # WaitNextEvent unless $Frame % 5;
+  DrawScore() unless $Frame % 30;
+
+  if (not ($Won or $Lost)) {
+    if ($IsDemo) {
+      $Done ||= $Clicked;
+      if (!PtInRgn(new Point($PlayerX - 50 * $MulTab[1], $PlayerY - 50 * $MulTab[3]), $LevRegion)) {
+        $Demo_AngGoal += PtInRgn(new Point($PlayerX - 50 * -cos($PlayerAng + .5), $PlayerY - 50 * sin($PlayerAng + .5)), $LevRegion)
+          ? .5 : -.5;
+        $Demo_VelGoal = 2;
+      } elsif (!PtInRgn(new Point($PlayerX - 100 * $MulTab[1], $PlayerY - 100 * $MulTab[3]), $LevRegion)) {
+        $Demo_AngGoal += PtInRgn(new Point($PlayerX - 100 * -cos($PlayerAng + .5), $PlayerY - 100 * sin($PlayerAng + .5)), $LevRegion)
+          ? .1 : -.1;
+        $Demo_VelGoal = 4;
+      } elsif ($Demo_TargInFront) {
+        $Demo_AngGoal = $PlayerAng + $Demo_TargInFront / 20;
+        $Demo_VelGoal = 9;
+      } elsif (rand > .98) {
+        $Demo_AngGoal += (rand 1) - .5;
+      } else {
+        $Demo_VelGoal = 8;
+      }
+      $PlayerAng += ($Demo_AngGoal - $PlayerAng) / 3;
+      $PlayerVel += ($Demo_VelGoal - $PlayerVel) / 3;
+    } else {
+      my ($dx, $dy) = GetMouseOffset();
+      $dx = 30 if $dx > 30;
+      $dx = -30 if $dx < -30;
+      $PlayerAng += $dx * .01;
+      $PlayerVel -= $dy / ($Height/30);
+    }
+
+    $PlayerVel = $MinSpd if $PlayerVel < $MinSpd;
+
+    my ($opx, $opy) = ($PlayerX, $PlayerY);
+    $PlayerX -= ($PlayerVel * $MulTab[1]);
+    $PlayerY -= ($PlayerVel * $MulTab[3]);
+    if (!PtInRgn(new Point($PlayerX, $PlayerY), $LevRegion)) {
+      ($PlayerX, $PlayerY) = ($opx, $opy);
+      if ($PlayerVel > 2) {
+        my $cticks = TickCount() + 1;
+        RGBForeColor(new RGBColor($PlayerVel * 2000 + 10000, 0, 0));
+        PaintRgn($DrawRegion);
+        $Health -= $PlayerVel * 1.5;
+        DrawHealthBar();
+        $Demo_AngGoal += 1 if $IsDemo;
+        1 while TickCount() < $cticks;
+        if ($Health <= 0) {$Lost = 1}
+                     else {$PlayerVel = 0}
+      }
+    }
+  } elsif ($Lost) {
+    $PlayerX -= ($PlayerVel * $MulTab[1]);
+    $PlayerY -= ($PlayerVel * $MulTab[3]);
+    $Lost += 1.5;
+    if ($Lost > 100) {
+      if ($IsDemo) {$Done = 1}
+              else {LoseMsg()}
+    }
+  } else {
+    if ($Won > 100) {
+      if ($IsDemo) {$Done = 1}
+              else {WinMsg()}
+    }
+    $Won++; $WScale = (($Won/60)**10) + 1;
+    $PlayerAng += $Won / 160;
+  }
+
+  DisposeRgn $DrawRegion;
+
+  $Demo_TargInFront = 0;
+  foreach (@ObjMov) {
+    next unless $$_{draw};
+    if (PtInRect(new Point($$_{'x'}, $$_{'y'}), new Rect($PlayerX-6, $PlayerY-6, $PlayerX+7, $PlayerY+7))) {
+      $TRemain--; $$_{draw} = 0;
+      DrawTargetsBar();
+      $Won = 1 unless $TRemain;
+    }
+    for (my $s = 0; $s < @Shots; $s++) {
+      my $shot = $Shots[$s];
+      if ( PtInRect(new Point($$_{'x'}, $$_{'y'}), new Rect($$shot{'x'}-6, $$shot{'y'}-6, $$shot{'x'}+6, $$shot{'y'}+6))) {
+        $$_{frozen} += $$shot{charge};
+        splice @Shots, $s--, 1;
+      }
+    }
+
+    if ($IsDemo) {
+      my ($x, $y) = MakePoint($$_{'x'}, $$_{'y'});
+      #$Demo_TargInFront ||= ($y < $CenterY and $x > $CenterX-10 and $x < $CenterX+10 and $y > $CenterY - VHEIGHT);
+      if ($y < $CenterY and $x > $CenterX-10 and $x < $CenterX+10 and $y > $CenterY - VHEIGHT) {
+        $Demo_TargInFront = $$_{frozen} ? 0.00001 : ($$_{xv} * $MulTab[0] + $$_{yv} * $MulTab[1]);
+      }
+    }
+
+    if ($$_{frozen}) {
+      $$_{frozen} = 0 if (--$$_{frozen}) < 0;
+      next;
+    }
+
+    my ($ox, $oy) = @$_{'x', 'y'};
+    $$_{'x'} += $$_{xv};
+    if (!PtInRgn(new Point($$_{'x'}, $$_{'y'}), $LevRegion)) {
+      @$_{'x', 'y'} = ($ox, $oy);
+      $$_{xv} *= -1;
+    }
+    $$_{'y'} += $$_{yv};
+    if (!PtInRgn(new Point($$_{'x'}, $$_{'y'}), $LevRegion)) {
+      @$_{'x', 'y'} = ($ox, $oy);
+      $$_{yv} *= -1;
+    }
+    $$_{yv} += (rand 2)-1;
+    $$_{xv} += (rand 2)-1;
+    $$_{yv} = 5 if $$_{yv} > 5;
+    $$_{xv} = 5 if $$_{xv} > 5;
+    $$_{yv} = -5 if $$_{yv} < -5;
+    $$_{xv} = -5 if $$_{xv} < -5;
+  }
+
+  if ($GunCharge < 100) {
+    $GunCharge += $GunCRate;
+    $GunCharge = 100 if $GunCharge > 100;
+    DrawGunBar();
+  }
+  if (!$Lost and !$Won and ((Button() or $Demo_TargInFront) and $GunCharge > 50)) {
+    my $f = (($GunCharge-50) / 50 * 65535);
+    $f = 65535 if $f > 65535;
+    push @Shots, {'y' => $PlayerY, 'x' => $PlayerX,
+      xv => ($PlayerVel + 12) * cos($PlayerAng),
+      yv => ($PlayerVel + 12) * -sin($PlayerAng),
+      life => 100, charge => $GunCharge, color => new RGBColor(($f)x2, 65535),
+    };
+    $GunCharge = 0;
+  }
+  for (my $s = 0; $s < @Shots; $s++) {
+    my $shot = $Shots[$s];
+    $$shot{'x'} += $$shot{xv};
+    $$shot{'y'} += $$shot{yv};
+    if (!(--$$shot{life}) or !PtInRgn(new Point($$shot{'x'}, $$shot{'y'}), $LevRegion)) {
+      splice @Shots, $s--, 1;
+    }
+  }
+}
+
+sub CompileLevel {
+  my @polys = map {
+    my $poly = OpenPoly;
+    my $pol = $_;
+    my $firstpt = shift @{$pol};
+    MoveTo $$firstpt[0], $$firstpt[1];
+    foreach my $pt (@{$pol}) {
+      LineTo $$pt[0], $$pt[1];
+    }
+    push @{$pol}, $firstpt;
+    LineTo $$firstpt[0], $$firstpt[1];
+    ClosePoly;
+    $poly;
+  } @_;
+  OpenRgn;
+  foreach (@polys) {
+    FramePoly $_;
+    KillPoly $_;
+  }
+  $LevRegion = CloseRgn;
+
+  my $code = <<'EOC';
+sub GetDrawRgn {
+  @MulTab = (-sin($PlayerAng), -cos($PlayerAng),
+             -cos($PlayerAng), sin($PlayerAng));
+  my ($poly, @polys, @s);
+EOC
+  foreach my $pol (@_) {
+    $code .= "  \$poly = OpenPoly;\n";
+    my $firstpt = shift @{$pol};
+    $code .= "  MoveTo \@s = MakePoint $$firstpt[0], $$firstpt[1];\n";
+    foreach my $pt (@{$pol}) {
+      $code .= "  LineTo MakePoint $$pt[0], $$pt[1];\n";
+    }
+    push @{$pol}, $firstpt;
+    $code .= "  LineTo \@s;\n  ClosePoly;\n  push \@polys, \$poly;\n";
+  }
+  $code .= <<'EOC';
+  OpenRgn;
+  foreach (@polys) {
+    FramePoly $_;
+    KillPoly $_;
+  }
+  return CloseRgn;
+}
+EOC
+  eval $code;
+  die $@ if $@;
+}
+
+sub MakePoint {
+  (($_[0] + -$PlayerX) * $MulTab[0] + ($_[1] + -$PlayerY) * $MulTab[1]) * .75 / $WScale + $CenterX,
+  (($_[0] + -$PlayerX) * $MulTab[2] + ($_[1] + -$PlayerY) * $MulTab[3]) * .75 / $WScale + $CenterY,
+  ;
+}
+
+sub DrawHealthBar {
+  $Health = 0 if $Health < 0;
+  ClipRect(FS_Port()->portRect);
+  my $hv = $Health / 100 * VWIDTH*2 + (!!$Health and $Health < 50);
+  RGBForeColor(COL_HEALTHFG);
+  PaintRect new Rect ($GameRect->left, $GameRect->bottom + 10, $GameRect->left + $hv, $GameRect->bottom + 24);
+  RGBForeColor(COL_HEALTHBG);
+  PaintRect new Rect ($GameRect->left + $hv, $GameRect->bottom + 10, $GameRect->right, $GameRect->bottom + 24);
+  ClipRect($GameRect);
+  DrawScore();
+}
+
+sub DrawGunBar {
+  ClipRect(FS_Port()->portRect);
+  my $hv = $GunCharge / 100 * VWIDTH/2;
+  RGBForeColor($GunCharge > 50 ? COL_GUNFG : COL_GUNLOW);
+  PaintRect new Rect ($GameRect->right - VWIDTH/2, $GameRect->top - 14, $GameRect->right - VWIDTH/2 + $hv, $GameRect->top - 6);
+  RGBForeColor(COL_GUNBG);
+  PaintRect new Rect ($GameRect->right - VWIDTH/2 + $hv, $GameRect->top - 14, $GameRect->right, $GameRect->top - 6);
+  ClipRect($GameRect);
+}
+
+sub DrawTargetsBar {
+  RGBForeColor(COL_BACKGROUND);
+  ClipRect(FS_Port()->portRect);
+  PaintRect new Rect ($GameRect->left, $GameRect->top - 20, $GameRect->right - VWIDTH/2, $GameRect->top);
+  my $lco = $GameRect->left + 8;
+  my $tco = $GameRect->top - 8;
+  for (my $i = 0; $i < @ObjMov; $i++) {
+    RGBForeColor($i < (@ObjMov-$TRemain) ? COL_TEXT : COL_TEXTSHAD);
+    FrameOval new Rect($lco+$i*17-5, $tco-5, $lco+$i*17+5, $tco+5);
+  }
+  ClipRect($GameRect);
+  DrawScore();
+}
+
+sub DrawScore {
+  RGBForeColor(COL_TEXT);
+  TextFont(geneva); TextSize(10);
+  ClipRect(FS_Port()->portRect);
+  EraseRect new Rect ($CenterX, $GameRect->top - 20, $GameRect->right - VWIDTH/2, $GameRect->top - 2);
+  my $s = Score();
+  MoveTo $GameRect->right - VWIDTH/2 - StringWidth($s) - 2, $GameRect->top - 6;
+  DrawString $s;
+  ClipRect($GameRect);
+}
+
+sub WinMsg {
+  my $g = Gradient_New(8000);
+  EraseRect(FS_Port()->portRect);
+  local $" = ':';
+  TextFont(0); TextSize(12);
+  CenterStr(
+    "Time: @{[reverse +(localtime(time - $StartTime))[0..2]]} Score: @{[Score()]}",
+    30,
+    COL_TEXT,
+  );
+  TextFont(0); TextSize(30);
+  $Clicked = 0;
+  my $cticks = 0;
+  while (!$Clicked and !$Done) {
+    WaitNextEvent(1);
+    Gradient_Iter($g);
+    CenterStr('You won!', 0, Gradient_Col($g));
+  }
+  $Done = 1;
+}
+
+sub LoseMsg {
+  EraseRect(FS_Port()->portRect);
+  local $" = ':';
+  TextFont(0); TextSize(12);
+  CenterStr(
+    "Time: @{[reverse +(localtime(time - $StartTime))[0..2]]}",
+    30,
+    COL_TEXT,
+  );
+  TextFont(0); TextSize(30);
+  CenterStr('YOU LOSE', 0, COL_TEXT);
+  $Clicked = 0;
+  while (!$Clicked and !$Done) {
+    WaitNextEvent(1);
+  }
+  $Done = 1;
+}
+
+sub Score {
+  int(
+    $Health * (@ObjMov-$TRemain) * (Difficulty() + .5) * 2 
+    - $Frame / 30 # Lose a point for every second
+  );
+}
+
+sub CenterStr {
+  my ($str, $y, $fc) = @_;
+
+  MoveTo(my $px = $CenterX - StringWidth($str) / 2, my $py = $CenterY + $y);
+  if (!$OldCStr or $OldCStr ne $str) {
+    RGBForeColor(COL_TEXTSHAD);
+    DrawString $str;
+  } 
+  RGBForeColor($fc);
+  MoveTo($px - 1, $py - 1);
+  DrawString $str;
+  $OldCStr = $str;
+}
+
+######## High Scores #####################################################################################################################
+
+use constant ENTRY_CHAR_WIDTH => 30;
+use constant ENTRY_CHAR_HEIGHT => 50;
+use constant ENTRY_PIXSTEP => 1;
+use constant ENTRY_STAGES => ENTRY_CHAR_WIDTH / ENTRY_PIXSTEP / 2;
+
+sub Scores {
+  my $mydone;
+  my $mbut = new GButton (new Rect ($CenterX - 40, $CenterY + 120, $CenterX + 40, $CenterY + 140), "Main Menu", sub { $mydone = 1 });
+  my $cbut = new GButton (new Rect ($CenterX - 50, $CenterY + 95, $CenterX + 50, $CenterY + 115), "Clear Scores", sub {@HighScores = (); $mydone = 1;});
+  my $htext = new GTextBox (new Rect ($CenterX - 80, $CenterY - 220, $CenterX + 80, $CenterY - 200), 'High Scores');
+  my @elems = ($mbut, $cbut, $htext);
+  my $vpos = $CenterY - 170;
+  foreach (@HighScores) {
+    push @elems, new GTextBox (new Rect ($CenterX - 100, $vpos, $CenterX + 100, $vpos + 20), $$_[0], -1);
+    push @elems, new GTextBox (new Rect ($CenterX - 100, $vpos, $CenterX + 100, $vpos + 20), $$_[1], 1);
+    if ($GotHigh and $$_[1] == $GotHighScore) {
+      push @elems, new GTextBox (new Rect ($CenterX - 140, $vpos, $CenterX - 100, $vpos + 20), "--> ", 1);
+      push @elems, new GTextBox (new Rect ($CenterX + 100, $vpos, $CenterX + 140, $vpos + 20), " <--", -1);
+      $GotHigh = 0;
+    }
+    $vpos += 20;
+  }
+  foreach (@elems) { FS_Win()->add_pane($_) }
+  while (!$mydone) {
+    WaitNextEvent;
+  }
+  foreach (@elems) { FS_Win()->remove_pane($_) }
+}
+
+sub HighScoreEntry {
+  return unless @HighScores < 10 or Score() > $HighScores[-1][1];
+  my $name = HandleTextField();
+  return unless $name;
+  push @HighScores, [$name, Score()];
+  @HighScores = (sort {$b->[1] <=> $a->[1]} @HighScores)[0..($#HighScores > 9 ? 9 : $#HighScores)];
+  $GotHigh = 1;
+  $GotHighScore = Score();
+}
+
+sub HandleTextField {
+  my $junkrgn = NewRgn;
+  my $htext = new GTextBox (new Rect ($CenterX - 280, $CenterY - 170, $CenterX + 280, $CenterY - 150), 'You got a high score! Please enter your name.');
+  FS_Win()->add_pane($htext);
+  WaitNextEvent; WaitNextEvent;
+  PenNormal;
+  my $entryrect = new Rect ($CenterX - 240, $CenterY - 25, $CenterX + 240, $CenterY + 25);
+  EraseRect($entryrect);
+  my $boxrect = InsetRect($entryrect, -2, -2);
+  DrawBox($boxrect);
+  my ($str, $leftedge, $tick) = ('', $CenterX, 0);
+  while (1) {
+    $CharTyped = undef;
+    1 until do {WaitNextEvent; defined $CharTyped};
+    last if $CharTyped eq "\n";
+    if ($CharTyped eq chr(8)) {
+      next unless length($str);
+      my $dchar = chop($str);
+      for (1..ENTRY_STAGES) {
+        1 until TickCount() >= $tick;
+        $tick = TickCount() + 1;
+        $leftedge += ENTRY_PIXSTEP;
+        ScrollRect($entryrect, ENTRY_PIXSTEP, 0, $junkrgn);
+        DrawCharStep($dchar, $leftedge + length($str) * ENTRY_CHAR_WIDTH, $CenterY - 25, 1 - $_ / ENTRY_STAGES);
+        DrawBox($boxrect);
+      }
+      next;
+    }
+    next if $CharTyped lt chr(31);
+    next if length($str) >= 16;
+    $str .= $CharTyped;
+    for (1..ENTRY_STAGES) {
+      1 until TickCount() >= $tick;
+      $tick = TickCount() + 1;
+      $leftedge += - ENTRY_PIXSTEP;
+      ScrollRect($entryrect, - ENTRY_PIXSTEP, 0, $junkrgn);
+      DrawCharStep($CharTyped, $leftedge + (length($str)-1) * ENTRY_CHAR_WIDTH, $CenterY - 25, $_ / ENTRY_STAGES);
+      DrawBox($boxrect);
+    }
+  }
+  DisposeRgn $junkrgn;
+  EraseRect $boxrect;
+  FS_Win()->remove_pane($htext);
+  return $str;
+}
+
+sub DrawBox {
+  my ($box) = @_;
+  RGBForeColor(COL_FLOOR);
+  PenSize(2, 2);
+  FrameRect($box);
+  PenSize(1, 1);
+}
+
+sub DrawCharStep {
+  my ($char, $left, $top, $stage) = @_;
+
+  my $rect = ltwh($left, $top, ENTRY_CHAR_WIDTH, ENTRY_CHAR_HEIGHT);
+  my $inrect = InsetRect($rect, (1-$stage) * ENTRY_CHAR_WIDTH, (1-$stage) * ENTRY_CHAR_HEIGHT);
+  TextFont(monaco);
+  TextSize(36);
+  RGBForeColor(new RGBColor(rand 65535, rand 65535, rand 65535));
+  MoveTo($left + 5, $top + ENTRY_CHAR_HEIGHT - 12);
+  EraseRect($rect);
+  FrameRect($inrect) if $stage < .99;
+  ClipRect($inrect);
+  DrawString($char);
+  ClipRect(GetPort()->portRect);
+}
+
+######## Misc stuff #####################################################################################################################
+
+sub SetMouse {
+  use Mac::LowMem;
+  my ($pt) = @_;
+  LMSetMouseTemp($pt);
+  LMSetRawMouseLocation($pt);
+  LMSetCursorNew(1);
+}
+
+sub GetMouseOffset {
+  use Mac::LowMem;
+  my $pt = GetMouse;
+  LMSetMouseTemp($CenterPt);
+  LMSetRawMouseLocation($CenterPt);
+  LMSetCursorNew(1);
+  ($pt->h - $CenterX, $pt->v - $CenterY);
+}
+
+sub ltwh ($$$$) {new Rect $_[0], $_[1], $_[0]+$_[2], $_[1]+$_[3]}
+
+sub r2p {
+  my ($left, $top, $right, $bottom) = @_;
+  return [[$left, $top], [$left, $bottom], [$right, $bottom], [$right, $top]];
+}
+
+######## Button #####################################################################################################################
+
+{ package GButton;
+  use Mac::Pane;
+  use Mac::Windows;
+  use Mac::QuickDraw;
+  # use Mac::KTools qw(ClickRect);
+  sub ltwh ($$$$);
+
+  BEGIN {
+    *ltwh = *main::ltwh;
+    use vars qw(@ISA);
+    @ISA = qw(Mac::Pane);
+  }
+ 
+  use constant LIGHT => new RGBColor ((48000)x3);
+  use constant MEDIUM => new RGBColor ((31000)x3);
+  use constant DARK => new RGBColor ((15000)x3);
+  use constant TEXT => new RGBColor ((65535)x3);
+
+  sub new {
+    my ($class, $rect, $name, $action) = @_;
+
+    my $self = bless {
+      rect => $rect,
+      name => $name,
+      action => $action,
+      active => 1,
+    }, $class;
+  }
+
+  sub move {
+    my ($self, $w, $rect) = @_;
+
+    SetPort $w->window;
+    InvalRect($self->{rect});
+    $self->{rect} = $rect;
+    InvalRect($rect);
+  }
+
+  sub attach {
+    my ($self, $w) = @_;
+    SetPort $w->window;
+    InvalRect($self->{rect});
+    $self->{window} = $w;
+  }
+
+  sub detach {
+    my ($self, $w) = @_;
+    SetPort $w->window;
+    InvalRect($self->{rect});
+    $self->{window} = undef;
+  }
+
+  sub activate {
+    my ($self, $w, $active) = @_;
+    $self->{active} = $active;
+    InvalRect $self->{rect};
+  }
+
+  sub redraw {
+    my ($self) = @_;
+ 
+    PenNormal;
+    my $rect = $self->{rect};
+    RGBForeColor(MEDIUM);
+    PaintRect($rect);
+    if ($self->{active}) {
+      PenSize(1, 1);
+      for (my $in = 0; $in < 3; $in++) {
+        my $inr = $in + 1;
+        RGBForeColor(LIGHT);
+        MoveTo($rect->right - ($inr+1), $rect->top + $in);
+        LineTo($rect->left + $in, $rect->top + $in);
+        LineTo($rect->left + $in, $rect->bottom - ($inr+1));
+        RGBForeColor(DARK);
+        MoveTo($rect->right - $inr, $rect->top + ($in+1));
+        LineTo($rect->right - $inr, $rect->bottom - $inr);
+        LineTo($rect->left + ($in+1), $rect->bottom - $inr);
+      }
+    }
+    TextFont(0); TextSize(0);
+    RGBForeColor(TEXT);
+    MoveTo($rect->left + (($rect->right - $rect->left) - StringWidth($self->{name}))/2, $rect->top + 14);
+    DrawString $self->{name};
+  }
+
+  sub click {
+    my ($self, $w, $pt) = @_;
+    
+    return 0 unless PtInRect($pt, $self->{rect});
+    my $inrect = InsetRect($self->{rect}, 1, 1);
+    my $doit;
+    if (ClickRect($inrect)) {
+      $self->{action}->($inrect);
+      InvertRect($inrect);
+    }
+    1;
+  }
+
+  sub SetName {
+    my ($self, $name) = @_;
+    
+    $self->{name} = $name;
+    SetPort $self->{window}->window;
+    InvalRect $self->{rect};
+  }
+}
+
+######## Slider #####################################################################################################################
+
+{ package GSlider;
+  use Mac::Pane;
+  use Mac::Windows;
+  use Mac::QuickDraw;
+  use Mac::Events;
+  # use Mac::KTools qw(ClickRect);
+  sub ltwh ($$$$);
+
+  BEGIN {
+    *ltwh = *main::ltwh;
+    use vars qw(@ISA);
+    @ISA = qw(Mac::Pane);
+  }
+ 
+  use constant LIGHT => new RGBColor ((43000)x3);
+  use constant MEDIUM => new RGBColor ((30000)x3);
+  use constant DARK => new RGBColor ((15000)x3);
+  use constant TEXT => new RGBColor ((65535)x3);
+
+  sub new {
+    my ($class, $rect, $name, $min, $max, $value, $action) = @_;
+
+    my $self = bless {
+      rect => $rect,
+      srect => InsetRect($rect, 1, 1),
+      name => $name,
+      action => $action,
+      active => 1,
+      min => $min,
+      max => $max,
+      value => $value,
+    }, $class;
+    $self->{slidewidth} = ($self->{srect}->right - $self->{srect}->left) / ($max - $min + 1);
+    $self;
+  }
+
+  sub attach {
+    my ($self, $w) = @_;
+    SetPort $w->window;
+    InvalRect($self->{rect});
+    $self->{window} = $w;
+  }
+
+  sub detach {
+    my ($self, $w) = @_;
+    SetPort $w->window;
+    InvalRect($self->{rect});
+    $self->{window} = undef;
+  }
+
+  sub activate {
+    my ($self, $w, $active) = @_;
+    $self->{active} = $active;
+    InvalRect $self->{rect};
+  }
+
+  sub redraw {
+    my ($self) = @_;
+ 
+    PenNormal;
+    my $rect = $self->{rect};
+    RGBForeColor(MEDIUM);
+    PaintRect($rect);
+    if ($self->{active}) {
+      PenSize(1, 1);
+      for (my $in = 0; $in < 3; $in++) {
+        my $inr = $in + 1;
+        RGBForeColor(DARK);
+        MoveTo($rect->right - ($inr+1), $rect->top + $in);
+        LineTo($rect->left + $in, $rect->top + $in);
+        LineTo($rect->left + $in, $rect->bottom - ($inr+1));
+        RGBForeColor(LIGHT);
+        MoveTo($rect->right - $inr, $rect->top + ($in+1));
+        LineTo($rect->right - $inr, $rect->bottom - $inr);
+        LineTo($rect->left + ($in+1), $rect->bottom - $inr);
+      }
+    }
+    TextFont(0); TextSize(0);
+    RGBForeColor(TEXT);
+    my $label = sprintf "%s: %.2f", $self->{name}, $self->{value};
+    MoveTo($rect->left + (($rect->right - $rect->left) - StringWidth($label))/2, $rect->top + 14);
+    DrawString $label;
+    my $srect = $self->{srect};
+    InvertRect new Rect ($srect->left + $self->{value} * $self->{slidewidth}, $srect->top, $srect->left + ($self->{value} + 1) * $self->{slidewidth}, $srect->bottom);
+    RGBForeColor(LIGHT);
+    MoveTo($srect->left + $self->{value} * $self->{slidewidth}, $srect->top);
+    LineTo($srect->left + $self->{value} * $self->{slidewidth}, $srect->bottom - 1);
+    RGBForeColor(DARK);
+    MoveTo($srect->left + ($self->{value} + 1) * $self->{slidewidth} - 1, $srect->top);
+    LineTo($srect->left + ($self->{value} + 1) * $self->{slidewidth} - 1, $srect->bottom - 1);
+  }
+
+  sub click {
+    my ($self, $w, $pt) = @_;
+    
+    return 0 unless PtInRect($pt, $self->{rect});
+    my $opt;
+    my $offset = $pt->h - $self->{value} * $self->{slidewidth};
+    while (StillDown()) {
+      $opt = $pt; $pt = GetMouse;
+      next if EqualPt($pt, $opt);
+      my $v = (GetMouse->h - $offset) / $self->{slidewidth};
+      $v = $self->{min} if $v < $self->{min};
+      $v = $self->{max} if $v > $self->{max};
+      $self->{value} = $v;
+      $self->redraw;
+      $self->{action}->($v) if $self->{action};
+    }
+    1;
+  }
+
+  sub SetValue {
+    my ($self, $val) = @_;
+    
+    $self->{value} = $val;
+    SetPort $self->{window}->window;
+    InvalRect $self->{rect};
+  }
+
+  sub GetValue {$_[0]{value}}
+}
+
+######## Text Box #####################################################################################################################
+
+{ package GTextBox;
+  use Mac::Pane;
+  use Mac::Windows;
+  use Mac::QuickDraw;
+  sub ltwh ($$$$);
+
+  BEGIN {
+    *ltwh = *main::ltwh;
+    use vars qw(@ISA);
+    @ISA = qw(Mac::Pane);
+  }
+ 
+  use constant TEXT => new RGBColor ((65535)x3);
+
+  sub new {
+    my ($class, $rect, $name, $align) = @_;
+
+    my $self = bless {
+      rect => $rect,
+      name => $name,
+      align => $align || 0,
+    }, $class;
+  }
+
+  sub attach {
+    my ($self, $w) = @_;
+    SetPort $w->window;
+    InvalRect($self->{rect});
+    $self->{window} = $w;
+  }
+
+  sub detach {
+    my ($self, $w) = @_;
+    SetPort $w->window;
+    InvalRect($self->{rect});
+    $self->{window} = undef;
+  }
+
+  sub redraw {
+    my ($self) = @_;
+ 
+    PenNormal;
+    my $rect = $self->{rect};
+    TextFont(0); TextSize(0);
+    RGBForeColor(TEXT);
+    if    ($self->{align} == -1) { MoveTo($rect->left, $rect->top + 13)}
+    elsif ($self->{align} == 1)  { MoveTo($rect->right - StringWidth($self->{name}) - 1, $rect->top + 13)}
+                            else { MoveTo($rect->left + (($rect->right - $rect->left) - StringWidth($self->{name}))/2, $rect->top + 13)}
+    ClipRect($rect);
+    DrawString $self->{name};
+    ClipRect($self->{window}->window->portRect);
+  }
+
+  sub SetText {
+    my ($self, $name) = @_;
+    
+    $self->{name} = $name;
+    SetPort $self->{window}->window;
+    EraseRect $self->{rect};
+    $self->redraw;
+  }
+}
+
+######## TextGradient #####################################################################################################################
+
+{ package TextGradient;
+
+use Carp;
+use Mac::Pane;
+use Mac::Windows;
+use Mac::QuickDraw;
+use Mac::Events;
+use Mac::Fonts;
+# use Mac::KTools qw(/^Gradient_/);
+
+use strict;
+use vars qw($VERSION @ISA %stdparam);
+
+BEGIN {
+sub ltwh ($$$$);
+*ltwh = *main::ltwh;
+$VERSION = '1.00';
+@ISA = qw(Mac::Pane);
+
+%stdparam = map {($_, 1)} qw(
+  Font Size X Y
+  Window Text
+);
+}
+
+sub new {
+  my ($class, %param) = @_;
+
+  foreach (keys %param) {
+    if (!$stdparam{$_}) {
+      carp "Unknown parameter: $_" if $^W;
+      delete $param{$_};
+    }
+  }
+
+  my $self = bless {
+    X => $param{X},
+    Y => $param{Y},
+    Font => 0,
+    Size => 24,
+    Text => '', 
+  }, $class;
+  @{$self}{keys %param} = values %param;
+
+  $self->SetStyle($self->{Font}, $self->{Size});
+  $self->{Window}->add_pane($self) if $self->{Window};
+
+  $self;
+}
+
+sub attach {
+  my ($self, $window) = @_;
+  $self->{Window} = $window;
+  SetPort $window->window;
+  InvalRect $self->Bounds;
+  1;
+}
+
+sub detach {
+  my ($self, $window) = @_;
+  SetPort $window->window;
+  InvalRect $self->Bounds;
+  $self->{Window} = undef;
+  1;
+}
+
+sub redraw {
+  my ($self, $win) = @_;
+
+  PenNormal;
+  TextFont($self->{Font});
+  TextSize($self->{Size});
+
+  my $right = $win->window->portRect->right;
+  my $g = Gradient_New(10000);
+  for (my $i = $self->{Y} - $self->{ascent}; $i < $self->{Y} + $self->{descend}; $i+=1) {
+    Gradient_Iter($g);
+    MoveTo $self->{X}, $self->{Y};
+    my $brect = new Rect(0, $i, $right, $i+1);
+    ClipRect($brect); 
+    RGBForeColor(Gradient_Col($g));
+    #EraseRect $brect;
+    DrawString $self->{Text};
+  }
+  ClipRect($win->window->portRect);
+
+  PenNormal;
+}
+
+sub DESTROY {
+  my ($self) = @_;
+
+}
+
+sub Bounds {
+  my ($self) = @_;
+
+  my $state = GetPenState;
+  TextFont($self->{Font});
+  TextSize($self->{Size});
+  my $r = new Rect (
+    $self->{X} - 1,
+    $self->{Y} - $self->{ascent} - 1,
+    $self->{X} + StringWidth($self->{Text}),
+    $self->{Y} + $self->{descend} + 2,
+  );
+  SetPenState $state;
+  $r;
+}
+
+sub SetStyle {
+  my ($self, $font, $size) = @_;
+
+  $self->{Font} = $font;
+  $self->{Size} = $size;
+
+  if ($self->{Window}) {
+    SetPort $self->{Window}->window;
+    InvalRect $self->Bounds if defined $self->{ascent};
+  }
+  my $state = GetPenState;
+  TextFont($self->{Font}); TextSize($size);
+  ($self->{ascent}, $self->{descend}) = GetFontInfo();
+  $self->{X} -= StringWidth($self->{Text})/2;
+  SetPenState $state;
+  InvalRect $self->Bounds if $self->{Window};
+}}
+
+__DATA__
+
+# feel free to put this into a .pm file and use it in your programs
+
+package Mac::KTools;
+require Exporter;
+@ISA = Exporter;
+
+@EXPORT_OK = qw(
+  FS_Start
+  FS_Stop
+  FS_Port
+  FS_Win
+  FS_Hook
+  Gradient_New
+  Gradient_Iter
+  Gradient_Col
+  ClickRect
+  $GPort
+);
+
+use strict;
+use Carp;
+use Mac::QuickDraw;
+use Mac::Windows;
+use Mac::Menus;
+use Mac::LowMem;
+use Mac::Events;
+
+use constant FILEMENU => GetMenu 129;
+use constant EDITMENU => GetMenu 130;
+
+use vars qw(
+  $VERSION
+
+  $FS_On
+  $FS_Win @FS_OSWins
+  $FS_Bounds
+  $FS_OldGrayRgn
+  $FS_OldMBH
+  $CGA $gnormal
+
+  $GPort
+);
+
+$VERSION = "1.01";
+BEGIN {eval 'use ColorGamma'; $CGA = !$@}
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+sub FS_Start {
+  return if $FS_On;
+  $FS_On = 1;
+  if ($CGA) {
+    $gnormal = new_GIHdl();
+    StartFading($gnormal) and die "Bad start";
+    FadeToBlack(100, inverseQuadraticFade());
+  }
+  $FS_OldGrayRgn = CopyRgn(GetGrayRgn());
+  RectRgn(GetGrayRgn, GetWMgrPort->portRect);
+  $FS_OldMBH = LMGetMBarHeight;
+  LMSetMBarHeight(0);
+  DisableItem FILEMENU;
+  DisableItem EDITMENU;
+
+  $FS_Win = new MacColorWindow (
+    $FS_Bounds = GetMainDevice->gdRect,
+    'Fullscreen 0',
+    1,
+    dBoxProc,
+    1,
+  );
+  $FS_Win->sethook('drawgrowicon', sub {});
+  SetPort $FS_Win->window;
+  RGBBackColor(new RGBColor(0,0,0));
+
+  for (1..20) {WaitNextEvent}
+  FadeToGamma($gnormal, 1, inverseQuadraticFade()) if $gnormal;
+
+  return ($FS_Bounds->right - $FS_Bounds->left,
+          $FS_Bounds->bottom - $FS_Bounds->top);
+}
+
+sub FS_Stop {
+  return unless $FS_On;
+  if ($CGA) {
+    StartFading($gnormal = new_GIHdl()) and die "Bad start";
+    FadeToBlack(40, inverseQuadraticFade());
+  }
+
+  LMSetMBarHeight($FS_OldMBH) if $FS_OldMBH;
+  EnableItem GetMenu 129;
+  EnableItem GetMenu 130;
+
+  if ($FS_Win) {
+    SetPort $FS_Win->window;
+    RGBBackColor(new RGBColor(0,0,0));
+    EraseRect($FS_Bounds);
+  }
+
+  if ($FS_OldGrayRgn) {
+    CopyRgn($FS_OldGrayRgn, GetGrayRgn);
+    DisposeRgn $FS_OldGrayRgn;
+  }
+  $FS_Win->dispose if $FS_Win;
+  $FS_On = 0;
+
+  WaitNextEvent; WaitNextEvent; WaitNextEvent; WaitNextEvent;
+    # let things redraw
+  if ($gnormal) {
+    FadeToGamma($gnormal, 90, inverseQuadraticFade());
+    StopFading($gnormal, 1);
+  }
+}
+
+sub FS_Port {$FS_Win->window}
+sub FS_Win {$FS_Win}
+
+sub FS_Hook {
+  my ($hook, $sub) = @_;
+
+  $FS_Win->sethook($hook => sub {shift; goto &$sub});
+}
+
+END {FS_Stop()}
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+sub Gradient_New {
+  my ($speed) = @_;
+
+  [map {val => rand 65535, vel => rand ($speed || 200)}, 1..3];
+}
+
+sub Gradient_Iter {
+  foreach my $c (@{$_[0]}) {
+    $c->{val} += $c->{vel};
+    if ($c->{val} > 65535 or $c->{val} < 0) {
+      $c->{vel} *= -1;
+      redo;
+    }
+  }
+}
+
+sub Gradient_Col {
+  return new RGBColor(map {$_->{val}} @{$_[0]})
+}
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+sub ClickRect {
+  my ($r) = @_;
+
+  my ($in, $oin) = (1, 1);
+  InvertRect($r);
+  while (StillDown()) {
+    $in = PtInRect(GetMouse, $r);
+    if ($in != $oin) {
+      InvertRect($r);
+    } 
+    $oin = $in;
+  }
+  $in;
+}
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+{ 
+  package GrafPortVar;
+  use Carp;
+  use Mac::QuickDraw;
+
+  sub TIESCALAR {bless {}, $_[0]}
+  sub FETCH {GetPort()}
+
+  sub STORE {
+    my ($class, $port) = @_;
+  
+    ref $port eq 'GrafPtr' or croak "Attempt to set \$GPort to a @{[ref $port]} instead of a GrafPtr";
+    my $oport = GetPort;
+    SetPort $port;
+    return $oport;
+  }
+}
+tie $GPort, 'GrafPortVar';
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+__END__

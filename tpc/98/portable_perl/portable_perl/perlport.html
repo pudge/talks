@@ -1,0 +1,1971 @@
+    <HTML> 
+	<HEAD> 
+	    <TITLE>perlport - Writing portable Perl
+
+</TITLE> 
+	</HEAD>
+
+	<BODY>
+
+<!-- INDEX BEGIN -->
+
+<UL>
+
+	<LI><A HREF="#NAME">NAME</A>
+	<LI><A HREF="#DESCRIPTION">DESCRIPTION</A>
+	<LI><A HREF="#ISSUES">ISSUES</A>
+	<UL>
+
+		<LI><A HREF="#Newlines">Newlines</A>
+		<LI><A HREF="#File_Paths">File Paths</A>
+		<LI><A HREF="#System_Interaction">System Interaction</A>
+		<LI><A HREF="#Interprocess_Communication_IPC_">Interprocess Communication (IPC)</A>
+		<LI><A HREF="#External_Subroutines_XS_">External Subroutines (XS)</A>
+		<LI><A HREF="#Standard_Modules">Standard Modules</A>
+		<LI><A HREF="#Time_and_Date">Time and Date</A>
+		<LI><A HREF="#System_Resources">System Resources</A>
+		<LI><A HREF="#Security">Security</A>
+		<LI><A HREF="#Style">Style</A>
+	</UL>
+
+	<LI><A HREF="#CPAN_TESTERS">CPAN TESTERS</A>
+	<LI><A HREF="#PLATFORMS">PLATFORMS</A>
+	<UL>
+
+		<LI><A HREF="#Unix">Unix</A>
+		<LI><A HREF="#DOS_and_Derivatives">DOS and Derivatives</A>
+		<LI><A HREF="#MacPerl">MacPerl</A>
+		<LI><A HREF="#VMS">VMS</A>
+		<LI><A HREF="#EBCDIC_Platforms">EBCDIC Platforms</A>
+		<LI><A HREF="#Other_perls">Other perls</A>
+	</UL>
+
+	<LI><A HREF="#FUNCTION_IMPLEMENTATIONS">FUNCTION IMPLEMENTATIONS</A>
+	<UL>
+
+		<LI><A HREF="#Alphabetical_Listing_of_Perl_Fun">Alphabetical Listing of Perl Functions</A>
+	</UL>
+
+	<LI><A HREF="#AUTHORS_CONTRIBUTORS">AUTHORS / CONTRIBUTORS</A>
+	<LI><A HREF="#VERSION">VERSION</A>
+</UL>
+<!-- INDEX END -->
+
+<HR>
+<P>
+<H1><A NAME="NAME">NAME
+
+</A></H1>
+perlport - Writing portable Perl
+
+
+<P>
+
+<P>
+<HR>
+<H1><A NAME="DESCRIPTION">DESCRIPTION
+
+</A></H1>
+Perl runs on a variety of operating systems. While most of them share a lot
+in common, they also have their own very particular and unique features.
+
+
+<P>
+
+This document is meant to help you to find out what constitutes portable
+perl code, so that once you have made your decision to write portably, you
+know where the lines are drawn, and you can stay within them.
+
+
+<P>
+
+There is a tradeoff between taking full advantage of <STRONG>a</STRONG> particular type of computer, and taking advantage of a full <STRONG>range</STRONG> of them. Naturally, as you make your range bigger (and thus more diverse),
+the common denominators drop, and you are left with fewer areas of common
+ground in which you can operate to accomplish a particular task. Thus, when
+you begin attacking a problem, it is important to consider which part of
+the tradeoff curve you want to operate under. Specifically, whether it is
+important to you that the task that you are coding needs the full
+generality of being portable, or if it is sufficient to just get the job
+done. This is the hardest choice to be made. The rest is easy, because Perl
+provides lots of choices, whichever way you want to approach your problem.
+
+
+<P>
+
+Looking at it another way, writing portable code is usually about willfully
+limiting your available choices. Naturally, it takes discipline to do that.
+
+
+<P>
+
+Be aware of two important points:
+
+
+<P>
+
+<DL>
+<DT><STRONG><A NAME="item_Not">Not all Perl programs have to be portable
+
+</A></STRONG><DD>
+There is no reason why you should not use Perl as a language to glue Unix
+tools together, or to prototype a Macintosh application, or to manage the
+Windows registry. If it makes no sense to aim for portability for one
+reason or another in a given program, then don't bother.
+
+
+<P>
+
+<DT><STRONG><A NAME="item_The">The vast majority of Perl is portable
+
+</A></STRONG><DD>
+Don't be fooled into thinking that it is hard to create portable Perl code.
+It isn't. Perl tries its level-best to bridge the gaps between what's
+available on different platforms, and all the means available to use those
+features. Thus almost all Perl code runs on any machine without
+modification. But there <EM>are</EM> some significant issues in writing portable code, and this document is
+entirely about those issues.
+
+
+<P>
+
+</DL>
+Here's the general rule: When you approach a task that is commonly done
+using a whole range of platforms, think in terms of writing portable code.
+That way, you don't sacrifice much by way of the implementation choices you
+can avail yourself of, and at the same time you can give your users lots of
+platform choices. On the other hand, when you have to take advantage of
+some unique feature of a particular platform, as is often the case with
+systems programming (whether for Unix, Windows,
+Mac&nbsp;OS, VMS, etc.), consider writing platform-specific code.
+
+
+<P>
+
+When the code will run on only two or three operating systems, then you may
+only need to consider the differences of those particular systems. The
+important thing is to decide where the code will run, and to be deliberate
+in your decision.
+
+
+<P>
+
+This information should not be considered complete; it includes possibly
+transient information about idiosyncracies of some of the ports, almost all
+of which are in a state of constant evolution. Thus this material should be
+considered a perpetual work in progress (&lt;IMG SRC=``yellow_sign.gif'' ALT=``Under Construction''&gt;).
+
+
+<P>
+
+<P>
+<HR>
+<H1><A NAME="ISSUES">ISSUES
+
+</A></H1>
+<P>
+<HR>
+<H2><A NAME="Newlines">Newlines
+
+</A></H2>
+In most operating systems, lines in files are separated with newlines. Just
+what is used as a newline may vary from OS to OS. Unix traditionally uses <CODE>\012</CODE>, one kind of Windows I/O uses <CODE>\015\012</CODE>, and Mac&nbsp;OS uses <CODE>\015</CODE>.
+
+
+<P>
+
+Perl uses <CODE>\n</CODE> to represent the ``logical'' newline, where what is logical may depend on
+the platform in use. In MacPerl, <CODE>\n</CODE>
+always means <CODE>\015</CODE>. In DOSish perls, <CODE>\n</CODE> usually means <CODE>\012</CODE>, but when accessing a file in ``text'' mode, STDIO translates it to (or
+from)
+<CODE>\015\012</CODE>.
+
+
+<P>
+
+Due to the ``text'' mode translation, DOSish perls have limitations of
+using <CODE>seek</CODE> and <CODE>tell</CODE> when a file is being accessed in ``text'' mode. Specifically, if you stick
+to <CODE>seek</CODE>-ing to locations you got from <CODE>tell</CODE> (and no others), you are usually free to use <CODE>seek</CODE> and
+<CODE>tell</CODE> even in ``text'' mode. In general, using <CODE>seek</CODE> or <CODE>tell</CODE> or other file operations that count bytes instead of characters, without
+considering the length of <CODE>\n</CODE>, may be non-portable. If you use
+<A HREF="#item_binmode">binmode</A> on a file, however, you can usually use <CODE>seek</CODE> and <CODE>tell</CODE>
+with arbitrary values quite safely.
+
+
+<P>
+
+A common misconception in socket programming is that <CODE>\n</CODE> eq <CODE>\012</CODE>
+everywhere. When using protocols, such as common Internet protocols,
+<CODE>\012</CODE> and <CODE>\015</CODE> are called for specifically, and the values of the logical <CODE>\n</CODE> and <CODE>\r</CODE> (carriage return) are not reliable.
+
+
+<P>
+
+<PRE>    print SOCKET &quot;Hi there, client!\r\n&quot;;      # WRONG
+    print SOCKET &quot;Hi there, client!\015\012&quot;;  # RIGHT
+</PRE>
+
+<P>
+
+[NOTE: this does not necessarily apply to communications that are filtered
+by another program or module before sending to the socket; the the most
+popular EBCDIC webserver, for instance, accepts <CODE>\r\n</CODE>, which translates those characters, along with all other characters in
+text streams, from EBCDIC to ASCII.]
+
+
+<P>
+
+However, <CODE>\015\012</CODE> (or <CODE>\cM\cJ</CODE>, or <CODE>\x0D\x0A</CODE>) can be tedious and unsightly, as well as confusing to those maintaining
+the code. As such, the <CODE>Socket</CODE> module supplies the Right Thing for those who want it.
+
+
+<P>
+
+<PRE>    use Socket qw(:DEFAULT :crlf);
+    print SOCKET &quot;Hi there, client!$CRLF&quot;      # RIGHT
+</PRE>
+
+<P>
+
+When reading <EM>from</EM> a socket, remember that the default input record separator (<CODE>$/</CODE>) is <CODE>\n</CODE>, but code like this should recognize <CODE>$/</CODE> as
+<CODE>\012</CODE> or <CODE>\015\012</CODE>:
+
+
+<P>
+
+<PRE>    while (&lt;SOCKET&gt;) {
+        # ...
+    }
+</PRE>
+
+<P>
+
+Better:
+
+
+<P>
+
+<PRE>    use Socket qw(:DEFAULT :crlf);
+    local($/) = LF;      # not needed if $/ is already \012
+</PRE>
+
+<P>
+
+<PRE>    while (&lt;SOCKET&gt;) {
+        s/$CR?$LF/\n/;   # not sure if socket uses LF or CRLF, OK
+    #   s/\015?\012/\n/; # same thing
+    }
+</PRE>
+
+<P>
+
+And this example is actually better than the previous one even for Unix
+platforms, because now any <CODE>\015</CODE>'s (<CODE>\cM</CODE>'s) are stripped out (and there was much rejoicing).
+
+
+<P>
+
+<P>
+<HR>
+<H2><A NAME="File_Paths">File Paths
+
+</A></H2>
+Most platforms these days structure files in a hierarchical fashion. So, it
+is reasonably safe to assume that any platform supports the notion of a
+``path'' to uniquely identify a file on the system. Just how that path is
+actually written, differs.
+
+
+<P>
+
+While they are similar, file path specifications differ between Unix,
+Windows, Mac&nbsp;OS, OS/2, VMS and probably others. Unix, for example, is one of the few OSes
+that has the idea of a root directory.  Mac&nbsp;OS
+uses <CODE>:</CODE> as a path separator instead of <CODE>/</CODE>. VMS, Windows, and OS/2 can work similarly to Unix with <CODE>/</CODE> as path separator, or in their own idiosyncratic ways.
+
+
+<P>
+
+As with the newline problem above, there are modules that can help. The
+<CODE>File::Spec</CODE> modules provide methods to do the Right Thing on whatever platform happens
+to be running the program.
+
+
+<P>
+
+<PRE>    use File::Spec;
+    chdir(File::Spec-&gt;updir());        # go up one directory
+    $file = File::Spec-&gt;catfile(
+        File::Spec-&gt;curdir(), 'temp', 'file.txt'
+    );
+    # on Unix and Win32, './temp/file.txt'
+    # on Mac OS, ':temp:file.txt'
+</PRE>
+
+<P>
+
+File::Spec is available in the standard distribution, as of version
+5.004_05.
+
+
+<P>
+
+In general, production code should not have file paths hardcoded; making
+them user supplied or from a configuration file is better, keeping in mind
+that file path syntax varies on different machines.
+
+
+<P>
+
+This is especially noticeable in scripts like Makefiles and test suites,
+which often assume <CODE>/</CODE> as a path separator for subdirectories.
+
+
+<P>
+
+Also of use is <CODE>File::Basename</CODE>, from the standard distribution, which splits a pathname into pieces (base
+filename, full path to directory, and file suffix).
+
+
+<P>
+
+Remember not to count on the existence of system-specific files, like 
+<EM>/etc/resolv.conf</EM>. If code does need to rely on such a file, include a description of the
+file and its format in the code's documentation, and make it easy for the
+user to override the default location of the file.
+
+
+<P>
+
+<P>
+<HR>
+<H2><A NAME="System_Interaction">System Interaction
+
+</A></H2>
+Not all platforms provide for the notion of a command line, necessarily.
+These are usually platforms that rely on a Graphical User Interface (GUI)
+for user interaction. So a program requiring command lines might not work
+everywhere. But this is probably for the user of the program to deal with.
+
+
+<P>
+
+Some platforms can't delete or rename files that are being held open by the
+system. Remember to <CODE>close</CODE> files when you are done with them. Don't <CODE>unlink</CODE> or <CODE>rename</CODE> an open file. Don't <CODE>tie</CODE> to or <A HREF="#item_open">open</A> a file that is already tied to or opened; <CODE>untie</CODE> or <CODE>close</CODE> first.
+
+
+<P>
+
+Don't count on a specific environment variable existing in <CODE>%ENV</CODE>. Don't even count on <CODE>%ENV</CODE> entries being case-sensitive, or even case-preserving.
+
+
+<P>
+
+Don't count on signals in portable programs.
+
+
+<P>
+
+Don't count on filename globbing. Use <CODE>opendir</CODE>, <CODE>readdir</CODE>, and 
+<CODE>closedir</CODE> instead.
+
+
+<P>
+
+<P>
+<HR>
+<H2><A NAME="Interprocess_Communication_IPC_">Interprocess Communication (IPC)
+
+</A></H2>
+In general, don't directly access the system in code that is meant to be
+portable. That means, no: <A HREF="#item_system">system</A>, <A HREF="#item_exec">exec</A>, <A HREF="#item_fork">fork</A>, <A HREF="#item_pipe">pipe</A>, <CODE>``</CODE>,
+<CODE>qx//</CODE>, <A HREF="#item_open">open</A> with a <CODE>|</CODE>, or any of the other things that makes being a Unix perl hacker worth
+being.
+
+
+<P>
+
+Commands that launch external processes are generally supported on most
+platforms (though many of them do not support any type of forking), but the
+problem with using them arises from what you invoke with them. External
+tools are often named differently on different platforms, often not
+available in the same location, often accept different arguments, often
+behave differently, and often represent their results in a
+platform-dependent way. Thus you should seldom depend on them to produce
+consistent results.
+
+
+<P>
+
+One especially common bit of Perl code is opening a pipe to sendmail:
+
+
+<P>
+
+<PRE>    open(MAIL, '|/usr/lib/sendmail -t') or die $!;
+</PRE>
+
+<P>
+
+This is fine for systems programming when sendmail is known to be
+available. But it is not fine for many non-Unix systems, and even some Unix
+systems that may not have sendmail installed. If a portable solution is
+needed, see the <CODE>Mail::Send</CODE> and <CODE>Mail::Mailer</CODE> modules in the <CODE>MailTools</CODE> distribution.  <CODE>Mail::Mailer</CODE> provides several mailing methods, including mail, sendmail, and direct SMTP
+(via <CODE>Net::SMTP</CODE>) if a mail transfer agent is not available.
+
+
+<P>
+
+The rule of thumb for portable code is: Do it all in portable Perl, or use
+a module that may internally implement it with platform-specific code, but
+expose a common interface. By portable Perl, we mean code that avoids the
+constructs described in this document as being non-portable.
+
+
+<P>
+
+<P>
+<HR>
+<H2><A NAME="External_Subroutines_XS_">External Subroutines (XS)
+
+</A></H2>
+XS code, in general, can be made to work with any platform; but dependent
+libraries, header files, etc., might not be readily available or portable,
+or the XS code itself might be platform-specific, just as Perl code might
+be. If the libraries and headers are portable, then it is normally
+reasonable to make sure the XS code is portable, too.
+
+
+<P>
+
+There is a different kind of portability issue with writing XS code:
+availability of a C compiler on the end-user's system. C brings with it its
+own portability issues, and writing XS code will expose you to some of
+those. Writing purely in perl is a comparatively easier way to achieve
+portability.
+
+
+<P>
+
+<P>
+<HR>
+<H2><A NAME="Standard_Modules">Standard Modules
+
+</A></H2>
+In general, the standard modules work across platforms. Notable exceptions
+are <CODE>CPAN.pm</CODE> (which currently makes connections to external programs that may not be
+available), platform-specific modules (like
+<CODE>ExtUtils::MM_VMS</CODE>), and DBM modules.
+
+
+<P>
+
+There is no one DBM module that is available on all platforms.
+<CODE>SDBM_File</CODE> and the others are generally available on all Unix and DOSish ports, but
+not in MacPerl, where <CODE>NBDM_File</CODE> and <CODE>DB_File</CODE> are available.
+
+
+<P>
+
+The good news is that at least some DBM module should be available, and
+<CODE>AnyDBM_File</CODE> will use whichever module it can find. Of course, then the code needs to be
+fairly strict, dropping to the lowest common denominator (e.g., not
+exceeding 1K for each record).
+
+
+<P>
+
+<P>
+<HR>
+<H2><A NAME="Time_and_Date">Time and Date
+
+</A></H2>
+The system's notion of time of day and calendar date is controlled in
+widely different ways. Don't assume the timezone is stored in <CODE>$ENV{TZ}</CODE>, and even if it is, don't assume that you can control the timezone through
+that variable.
+
+
+<P>
+
+Don't assume that the epoch starts at January 1, 1970, because that is
+OS-specific. Better to store a date in an unambiguous representation. A
+text representation (like <CODE>1 Jan 1970</CODE>) can be easily converted into an OS-specific value using a module like <CODE>Date::Parse</CODE>. An array of values, such as those returned by <CODE>localtime</CODE>, can be converted to an OS-specific representation using <CODE>Time::Local</CODE>.
+
+
+<P>
+
+<P>
+<HR>
+<H2><A NAME="System_Resources">System Resources
+
+</A></H2>
+If your code is destined for systems with severely constrained (or
+missing!) virtual memory systems then you want to be especially mindful of
+avoiding wasteful constructs such as:
+
+
+<P>
+
+<PRE>    # NOTE: this is no longer &quot;bad&quot; in perl5.005
+    for (0..10000000) {}                       # bad
+    for (my $x = 0; $x &lt;= 10000000; ++$x) {}   # good
+</PRE>
+
+<P>
+
+<PRE>    @lines = &lt;VERY_LARGE_FILE&gt;;                # bad
+</PRE>
+
+<P>
+
+<PRE>    while (&lt;FILE&gt;) {$file .= $_}               # sometimes bad
+    $file = join '', &lt;FILE&gt;;                   # better
+</PRE>
+
+<P>
+
+The last two may appear unintuitive to most people. The first of those two
+constructs repeatedly grows a string, while the second allocates a large
+chunk of memory in one go. On some systems, the latter is more efficient
+that the former.
+
+
+<P>
+
+<P>
+<HR>
+<H2><A NAME="Security">Security
+
+</A></H2>
+Most Unix platforms provide basic levels of security that is usually felt
+at the file-system level. Other platforms usually don't (unfortunately).
+Thus the notion of User-ID, or ``home'' directory, or even the state of
+being logged-in may be unrecognizable on may platforms. If you write
+programs that are security conscious, it is usually best to know what type
+of system you will be operating under, and write code explicitly for that
+platform (or class of platforms).
+
+
+<P>
+
+<P>
+<HR>
+<H2><A NAME="Style">Style
+
+</A></H2>
+For those times when it is necessary to have platform-specific code,
+consider keeping the platform-specific code in one place, making porting to
+other platforms easier. Use the <CODE>Config</CODE> module and the special variable <CODE>$^O</CODE> to differentiate platforms, as described in <A HREF="#PLATFORMS">PLATFORMS</A>.
+
+
+<P>
+
+<P>
+<HR>
+<H1><A NAME="CPAN_TESTERS">CPAN TESTERS
+
+</A></H1>
+Module uploaded to CPAN are tested by a variety of volunteers on different
+platforms. These CPAN testers are notified by e-mail of each new upload,
+and reply to the list with PASS, FAIL, NA (not applicable to this
+platform), or ???? (unknown), along with any relevant notations.
+
+
+<P>
+
+The purpose of the testing is twofold: one, to help developers fix any
+problems in their code; two, to provide users with information about
+whether or not a given module works on a given platform.
+
+
+<P>
+
+<DL>
+<DT><STRONG><A NAME="item_Mailing">Mailing list: cpan-testers@perl.org
+
+</A></STRONG><DD>
+<DT><STRONG><A NAME="item_Testing">Testing results: http://www.connect.net/gbarr/cpan-test/
+
+</A></STRONG><DD>
+</DL>
+<P>
+<HR>
+<H1><A NAME="PLATFORMS">PLATFORMS
+
+</A></H1>
+As of version 5.002, Perl is built with a <CODE>$^O</CODE> variable that indicates the operating system it was built on. This was
+implemented to help speed up code that would otherwise have to <CODE>use Config;</CODE> and use the value of <CODE>$Config{'osname'}</CODE>. Of course, to get detailed information about the system, looking into <CODE>%Config</CODE> is certainly recommended.
+
+
+<P>
+
+<P>
+<HR>
+<H2><A NAME="Unix">Unix
+
+</A></H2>
+Perl works on a bewildering variety of Unix and Unix-like platforms (see
+e.g. most of the files in the <EM>hints/</EM> directory in the source code kit). On most of these systems, the value of <CODE>$^O</CODE> (hence <CODE>$Config{'osname'}</CODE>, too) is determined by lowercasing and stripping punctuation from the
+first field of the string returned by typing
+
+
+<P>
+
+<PRE>    % uname -a
+</PRE>
+
+<P>
+
+(or a similar command) at the shell prompt. Here, for example, are a few of
+the more popular Unix flavors:
+
+
+<P>
+
+<PRE>    uname        $^O
+    --------------------
+    AIX          aix
+    FreeBSD      freebsd
+    Linux        linux
+    HP-UX        hpux
+    OSF1         dec_osf
+    SunOS        solaris
+    SunOS4       sunos
+</PRE>
+
+<P>
+
+<P>
+<HR>
+<H2><A NAME="DOS_and_Derivatives">DOS and Derivatives
+
+</A></H2>
+Perl has long been ported to PC style microcomputers running under systems
+like PC-DOS, MS-DOS, OS/2, and most Windows platforms you can bring
+yourself to mention (except for Windows CE, if you count that). Users
+familiar with <EM>COMMAND.COM</EM> and/or <EM>CMD.EXE</EM> style shells should be aware that each of these file specifications may
+have subtle differences:
+
+
+<P>
+
+<PRE>    $filespec0 = &quot;c:/foo/bar/file.txt&quot;;
+    $filespec1 = &quot;c:\\foo\\bar\\file.txt&quot;;
+    $filespec2 = 'c:\foo\bar\file.txt';
+    $filespec3 = 'c:\\foo\\bar\\file.txt';
+</PRE>
+
+<P>
+
+System calls accept either <CODE>/</CODE> or <CODE>\</CODE> as the path separator. However, many command-line utilities of DOS vintage
+treat <CODE>/</CODE> as the option prefix, so they may get confused by filenames containing <CODE>/</CODE>. Aside from calling any external programs, <CODE>/</CODE> will work just fine, and probably better, as it is more consistent with
+popular usage, and avoids the problem of remembering what to backwhack and
+what not to.
+
+
+<P>
+
+The DOS FAT file system can only accomodate ``8.3'' style filenames. Under
+the ``case insensitive, but case preserving'' HPFS (OS/2) and NTFS (NT)
+file systems you may have to be careful about case returned with functions
+like <CODE>readdir</CODE> or used with functions like <A HREF="#item_open">open</A> or <CODE>opendir</CODE>.
+
+
+<P>
+
+DOS also treats several filenames as special, such as AUX, PRN, NUL, CON,
+COM1, LPT1, LPT2 etc. Unfortunately these filenames won't even work if you
+include an explicit directory prefix, in some cases. It is best to avoid
+such filenames, if you want your code to be portable to DOS and its
+derivatives.
+
+
+<P>
+
+Users of these operating systems may also wish to make use of scripts such
+as <EM>pl2bat.bat</EM> or <EM>pl2cmd</EM> as appropriate to put wrappers around your scripts.
+
+
+<P>
+
+Newline (<CODE>\n</CODE>) is translated as <CODE>\015\012</CODE> by STDIO when reading from and writing to files.  <A HREF="#item_binmode">binmode(FILEHANDLE)</A> will keep <CODE>\n</CODE> translated as <CODE>\012</CODE> for that filehandle. Since it is a noop on other systems,
+<A HREF="#item_binmode">binmode</A> should be used for cross-platform code that deals with binary data.
+
+
+<P>
+
+The <CODE>$^O</CODE> variable and the <CODE>$Config{'archname'}</CODE> values for various DOSish perls are as follows:
+
+
+<P>
+
+<PRE>    OS            $^O        $Config{'archname'}
+    --------------------------------------------
+    MS-DOS        dos
+    PC-DOS        dos
+    OS/2          os2
+    Windows 95    MSWin32    MSWin32-x86
+    Windows NT    MSWin32    MSWin32-x86
+    Windows NT    MSWin32    MSWin32-alpha
+    Windows NT    MSWin32    MSWin32-ppc
+</PRE>
+
+<P>
+
+Also see:
+
+
+<P>
+
+<DL>
+<DT><STRONG>The djgpp environment for DOS, http://www.delorie.com/djgpp/
+
+</A></STRONG><DD>
+<DT><STRONG>The EMX environment for DOS, OS/2, etc. emx@iaehv.nl,
+http://www.juge.com/bbs/Hobb.19.html
+
+</A></STRONG><DD>
+<DT><STRONG><A NAME="item_Build">Build instructions for Win32, perlwin32.
+
+</A></STRONG><DD>
+<DT><STRONG>The ActiveState Pages, http://www.activestate.com/
+
+</A></STRONG><DD>
+</DL>
+<P>
+<HR>
+<H2><A NAME="MacPerl">MacPerl
+
+</A></H2>
+Any module requiring XS compilation is right out for most people, because
+MacPerl is built using non-free (and non-cheap!) compilers. Some XS modules
+that can work with MacPerl are built and distributed in binary form on
+CPAN. See <EM>MacPerl: Power and Ease</EM> for more details.
+
+
+<P>
+
+Directories are specified as:
+
+
+<P>
+
+<PRE>    volume:folder:file              for absolute pathnames
+    volume:folder:                  for absolute pathnames
+    :folder:file                    for relative pathnames
+    :folder:                        for relative pathnames
+    :file                           for relative pathnames
+    file                            for relative pathnames
+</PRE>
+
+<P>
+
+Files in a directory are stored in alphabetical order. Filenames are
+limited to 31 characters, and may include any character except <CODE>:</CODE>, which is reserved as a path separator.
+
+
+<P>
+
+Instead of <A HREF="#item_flock">flock</A>, see <CODE>FSpSetFLock</CODE> and <CODE>FSpRstFLock</CODE> in
+<CODE>Mac::Files</CODE>.
+
+
+<P>
+
+In the MacPerl application, you can't run a program from the command line;
+programs that expect <CODE>@ARGV</CODE> to be populated can be edited with something like the following, which
+brings up a dialog box asking for the command line arguments.
+
+
+<P>
+
+<PRE>    if (!@ARGV) {
+        @ARGV = split /\s+/, MacPerl::Ask('Arguments?');
+    }
+</PRE>
+
+<P>
+
+A MacPerl script saved as a droplet will populate <CODE>@ARGV</CODE> with the full pathnames of the files dropped onto the script.
+
+
+<P>
+
+Mac users can use programs on a kind of command line under MPW (Macintosh
+Programmer's Workshop, a free development environment from Apple). MacPerl
+was first introduced as an MPW tool, and MPW can be used like a shell:
+
+
+<P>
+
+<PRE>    perl myscript.plx some arguments
+</PRE>
+
+<P>
+
+ToolServer is another app from Apple that provides access to MPW tools from
+MPW and the MacPerl app, which allows MacPerl program to use 
+<A HREF="#item_system">system</A>, backticks, and piped <A HREF="#item_open">open</A>.
+
+
+<P>
+
+``Mac&nbsp;OS'' is the proper name for the operating system, but the value in <CODE>$^O</CODE> is ``MacOS''. To determine architecture, version, or whether the
+application or MPW tool version is running, check:
+
+
+<P>
+
+<PRE>    $is_app    = $MacPerl::Version =~ /App/;
+    $is_tool   = $MacPerl::Version =~ /MPW/;
+    ($version) = $MacPerl::Version =~ /^(\S+)/;
+    $is_ppc    = $MacPerl::Architecture eq 'MacPPC';
+    $is_68k    = $MacPerl::Architecture eq 'Mac68K';
+</PRE>
+
+<P>
+
+Also see:
+
+
+<P>
+
+<DL>
+<DT><STRONG>The MacPerl Pages, http://www.ptf.com/macperl/.
+
+</A></STRONG><DD>
+<DT><STRONG>The MacPerl mailing list, mac-perl-request@iis.ee.ethz.ch.
+
+</A></STRONG><DD>
+</DL>
+<P>
+<HR>
+<H2><A NAME="VMS">VMS
+
+</A></H2>
+Perl on VMS is discussed in <EM>vms/perlvms.pod</EM> in the perl distribution. Note that perl on VMS can accept either VMS or
+Unix style file specifications as in either of the following:
+
+
+<P>
+
+<PRE>    $ perl -ne &quot;print if /perl_setup/i&quot; SYS$LOGIN:LOGIN.COM
+    $ perl -ne &quot;print if /perl_setup/i&quot; /sys$login/login.com
+</PRE>
+
+<P>
+
+but not a mixture of both as in:
+
+
+<P>
+
+<PRE>    $ perl -ne &quot;print if /perl_setup/i&quot; sys$login:/login.com
+    Can't open sys$login:/login.com: file specification syntax error
+</PRE>
+
+<P>
+
+Interacting with Perl from the Digital Command Language (DCL) shell often
+requires a different set of quotation marks than Unix shells do. For
+example:
+
+
+<P>
+
+<PRE>    $ perl -e &quot;print &quot;&quot;Hello, world.\n&quot;&quot;&quot;
+    Hello, world.
+</PRE>
+
+<P>
+
+There are a number of ways to wrap your perl scripts in DCL .COM files if
+you are so inclined. For example:
+
+
+<P>
+
+<PRE>    $ write sys$output &quot;Hello from DCL!&quot;
+    $ if p1 .eqs. &quot;&quot;
+    $ then perl -x 'f$environment(&quot;PROCEDURE&quot;)
+    $ else perl -x - 'p1 'p2 'p3 'p4 'p5 'p6 'p7 'p8
+    $ deck/dollars=&quot;__END__&quot;
+    #!/usr/bin/perl
+</PRE>
+
+<P>
+
+<PRE>    print &quot;Hello from Perl!\n&quot;;
+</PRE>
+
+<P>
+
+<PRE>    __END__
+    $ endif
+</PRE>
+
+<P>
+
+Do take care with <CODE>$ ASSIGN/nolog/user SYS$COMMAND: SYS$INPUT</CODE> if your perl-in-DCL script expects to do things like <CODE>$read = &lt;STDIN&gt;;</CODE>.
+
+
+<P>
+
+Filenames are in the format ``name.extension;version''. The maximum length
+for filenames is 39 characters, and the maximum length for extensions is
+also 39 characters. Version is a number from 1 to 32767. Valid characters
+are <CODE>/[A-Z0-9$_-]/</CODE>.
+
+
+<P>
+
+VMS' RMS filesystem is case insensitive and does not preserve case.
+<CODE>readdir</CODE> returns lowercased filenames, but specifying a file for opening remains
+case insensitive. Files without extensions have a trailing period on them,
+so doing a <CODE>readdir</CODE> with a file named <EM>A.;5</EM>
+will return <EM>a.</EM> (though that file could be opened with <A HREF="#item_open">open(FH, 'A')</A>.
+
+
+<P>
+
+RMS has an eight level limit on directory depths from any rooted logical
+(allowing 16 levels overall). Hence <CODE>PERL_ROOT:[LIB.2.3.4.5.6.7.8]</CODE>
+is a valid directory specification but <CODE>PERL_ROOT:[LIB.2.3.4.5.6.7.8.9]</CODE>
+is not.  <EM>Makefile.PL</EM> authors might have to take this into account, but at least they can refer
+to the former as <CODE>/PERL_ROOT/lib/2/3/4/5/6/7/8/</CODE>.
+
+
+<P>
+
+The <CODE>VMS::Filespec</CODE> module, which gets installed as part of the build process on VMS, is a pure
+Perl module that can easily be installed on non-VMS platforms and can be
+helpful for conversions to and from RMS native formats.
+
+
+<P>
+
+What <CODE>\n</CODE> represents depends on the type of file that is open. It could be <CODE>\015</CODE>, <CODE>\012</CODE>, <CODE>\015\012</CODE>, or nothing. Reading from a file translates newlines to <CODE>\012</CODE>, unless <A HREF="#item_binmode">binmode</A> was executed on that handle, just like DOSish perls.
+
+
+<P>
+
+TCP/IP stacks are optional on VMS, so socket routines might not be
+implemented. UDP sockets may not be supported.
+
+
+<P>
+
+The value of <CODE>$^O</CODE> on OpenVMS is ``VMS''. To determine the architecture that you are running
+on without resorting to loading all of <CODE>%Config</CODE>
+you can examine the content of the <CODE>@INC</CODE> array like so:
+
+
+<P>
+
+<PRE>    if (grep(/VMS_AXP/, @INC)) { 
+        print &quot;I'm on Alpha!\n&quot;;
+    } elsif (grep(/VMS_VAX/, @INC)) {
+        print &quot;I'm on VAX!\n&quot;;
+    } else {
+        print &quot;I'm not so sure about where $^O is...\n&quot;;
+    }
+</PRE>
+
+<P>
+
+Also see:
+
+
+<P>
+
+<DL>
+<DT><STRONG><A NAME="item_perlvms">perlvms.pod
+
+</A></STRONG><DD>
+<DT><STRONG><A NAME="item_vmsperl">vmsperl list, vmsperl-request@newman.upenn.edu
+
+</A></STRONG><DD>
+Put words <CODE>SUBSCRIBE VMSPERL</CODE> in message body.
+
+
+<P>
+
+<DT><STRONG>vmsperl on the web, http://www.sidhe.org/vmsperl/index.html
+
+</A></STRONG><DD>
+</DL>
+<P>
+<HR>
+<H2><A NAME="EBCDIC_Platforms">EBCDIC Platforms
+
+</A></H2>
+Recent versions of Perl have been ported to platforms such as OS/400 on
+AS/400 minicomputers as well as OS/390 for IBM Mainframes. Such computers
+use EBCDIC character sets internally (usually Character Code Set ID 00819
+for OS/400 and IBM-1047 for OS/390). Note that on the mainframe perl
+currently works under the ``Unix system services for OS/390'' (formerly
+known as OpenEdition).
+
+
+<P>
+
+As of R2.5 of USS for OS/390 that Unix sub-system did not support the 
+<CODE>#!</CODE> shebang trick for script invocation. Hence, on OS/390 perl scripts can
+executed with a header similar to the following simple script:
+
+
+<P>
+
+<PRE>    : # use perl
+        eval 'exec /usr/local/bin/perl -S $0 ${1+&quot;$@&quot;}'
+            if 0;
+    #!/usr/local/bin/perl     # just a comment really
+</PRE>
+
+<P>
+
+<PRE>    print &quot;Hello from perl!\n&quot;;
+</PRE>
+
+<P>
+
+On these platforms, bear in mind that the EBCDIC character set may have an
+effect on what happens with perl functions such as <CODE>chr</CODE>, <CODE>pack</CODE>,
+<CODE>print</CODE>, <CODE>printf</CODE>, <CODE>ord</CODE>, <CODE>sort</CODE>, <CODE>sprintf</CODE>, <CODE>unpack</CODE>; as well as bit-fiddling with ASCII constants using operators like <CODE>^</CODE>, <CODE>&</CODE> and
+<CODE>|</CODE>; not to mention dealing with socket interfaces to ASCII computers (see <A HREF="#NEWLINES">NEWLINES</A>).
+
+
+<P>
+
+Fortunately, most web servers for the mainframe will correctly translate
+the <CODE>\n</CODE> in the following statement to its ASCII equivalent (note that
+<CODE>\r</CODE> is the same under both ASCII and EBCDIC):
+
+
+<P>
+
+<PRE>    print &quot;Content-type: text/html\r\n\r\n&quot;;
+</PRE>
+
+<P>
+
+The value of <CODE>$^O</CODE> on OS/390 is ``os390''.  
+
+
+<P>
+
+Some simple tricks for determining if you are running on an EBCDIC platform
+could include any of the following (perhaps all):
+
+
+<P>
+
+<PRE>    if (&quot;\t&quot; eq &quot;\05&quot;)   { print &quot;EBCDIC may be spoken here!\n&quot;; }
+</PRE>
+
+<P>
+
+<PRE>    if (ord('A') == 193) { print &quot;EBCDIC may be spoken here!\n&quot;; }
+</PRE>
+
+<P>
+
+<PRE>    if (chr(169) eq 'z') { print &quot;EBCDIC may be spoken here!\n&quot;; }
+</PRE>
+
+<P>
+
+Note that one thing you may not want to rely on is the EBCDIC encoding of
+punctuation characters since these may differ from code page to code page
+(and once your module or script is rumoured to work with EBCDIC, folks will
+want it to work with all EBCDIC character sets).
+
+
+<P>
+
+Also see:
+
+
+<P>
+
+<DL>
+<DT><STRONG><A NAME="item_perl">perl-mvs list
+
+</A></STRONG><DD>
+The <A HREF="MAILTO:perl-mvs@perl.org">perl-mvs@perl.org</A> list is for
+discussion of porting issues as well as general usage issues for all EBCDIC
+Perls. Send a message body of ``subscribe perl-mvs'' to <A
+HREF="MAILTO:majordomo@perl.org.">majordomo@perl.org.</A>
+
+
+<P>
+
+<DT><STRONG><A NAME="item_AS">AS/400 Perl information at http://as400.rochester.ibm.com
+
+</A></STRONG><DD>
+</DL>
+<P>
+<HR>
+<H2><A NAME="Other_perls">Other perls
+
+</A></H2>
+Perl has been ported to a variety of platforms that do not fit into any of
+the above categories. Some, such as AmigaOS, BeOS, QNX, and Plan 9, have
+been well integrated into the standard Perl source code kit. You may need
+to see the <EM>ports/</EM> directory on CPAN for information, and possibly binaries, for the likes of:
+acorn, aos, atari, lynxos, HP-MPE/iX, riscos, Tandem Guardian, vos, <EM>etc.</EM> (yes we know that some of these OSes may fall under the Unix category but
+we are not a standards body.) 
+
+
+<P>
+
+See also:
+
+
+<P>
+
+<DL>
+<DT><STRONG><A NAME="item_Atari">Atari, Guido Flohr's page http://stud.uni-sb.de/~gufl0000/ 
+
+</A></STRONG><DD>
+<DT><STRONG><A NAME="item_HP">HP 300 MPE/iX  http://www.cccd.edu/~markb/perlix.html
+
+</A></STRONG><DD>
+<DT><STRONG><A NAME="item_Novell">Novell Netware
+
+</A></STRONG><DD>
+A free Perl 5 based PERL.NLM for Novell Netware is available from
+<CODE>http://www.novell.com/</CODE>
+
+
+
+
+<P>
+
+</DL>
+<P>
+<HR>
+<H1><A NAME="FUNCTION_IMPLEMENTATIONS">FUNCTION IMPLEMENTATIONS
+
+</A></H1>
+Listed below are functions unimplemented or implemented differently on
+various platforms. Following each description will be, in parentheses, a
+list of platforms that the description applies to.
+
+
+<P>
+
+The list may very well be incomplete, or wrong in some places. When in
+doubt, consult the platform-specific README files in the Perl source
+distribution, and other documentation resources for a given port.
+
+
+<P>
+
+Be aware, moreover, that even among Unix-ish systems there are variations,
+and not all functions listed here are necessarily available, though most
+usually are.
+
+
+<P>
+
+For many functions, you can also query <CODE>%Config</CODE>, exported by default from <CODE>Config.pm</CODE>. For example, to check if the platform has the <A HREF="#item_lstat">lstat</A>
+call, check <CODE>$Config{'d_lstat'}</CODE>. See <EM>Config</EM> for a full description of available variables.
+
+
+<P>
+
+<P>
+<HR>
+<H2><A NAME="Alphabetical_Listing_of_Perl_Fun">Alphabetical Listing of Perl Functions
+
+</A></H2>
+<DL>
+<DT><STRONG><A NAME="item__X">-X FILEHANDLE
+
+</A></STRONG><DD>
+<DT><STRONG>-X EXPR
+
+</A></STRONG><DD>
+<DT><STRONG>-X
+
+</A></STRONG><DD>
+<CODE>-r</CODE>, <CODE>-w</CODE>, and <CODE>-x</CODE> have only a very limited meaning; directories and applications are
+executable, and there are no uid/gid considerations. <CODE>-o</CODE> is not supported. (Mac&nbsp;OS)
+
+
+<P>
+
+<CODE>-r</CODE>, <CODE>-w</CODE>, <CODE>-x</CODE>, and <CODE>-o</CODE> tell whether or not file is accessible, which may not reflect UIC-based
+file protections. (VMS)
+
+
+<P>
+
+<CODE>-R</CODE>, <CODE>-W</CODE>, <CODE>-X</CODE>, <CODE>-O</CODE> are indistinguishable from <CODE>-r</CODE>, <CODE>-w</CODE>,
+<CODE>-x</CODE>, <CODE>-o</CODE>. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<CODE>-b</CODE>, <CODE>-c</CODE>, <CODE>-k</CODE>, <CODE>-g</CODE>, <CODE>-p</CODE>, <CODE>-u</CODE>, <CODE>-A</CODE> are not implemented. (Mac&nbsp;OS)
+
+
+<P>
+
+<CODE>-g</CODE>, <CODE>-k</CODE>, <CODE>-l</CODE>, <CODE>-p</CODE>, <CODE>-u</CODE>, <CODE>-A</CODE> are not particularly meaningful. (Win32, VMS)
+
+
+<P>
+
+<CODE>-d</CODE> is true if passed a device spec without an explicit directory. (VMS)
+
+
+<P>
+
+<CODE>-T</CODE> and <CODE>-B</CODE> are implemented, but might misclassify Mac text files with foreign
+characters; this is the case will all platforms, but affects Mac&nbsp;OS a lot. (Mac&nbsp;OS)
+
+
+<P>
+
+<CODE>-x</CODE> (or <CODE>-X</CODE>) determine if a file ends in one of the executable suffixes. <CODE>-S</CODE> is meaningless. (Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_binmode">binmode FILEHANDLE
+
+</A></STRONG><DD>
+Meaningless. (Mac&nbsp;OS)
+
+
+<P>
+
+Reopens file and restores pointer; if function fails, underlying filehandle
+may be closed, or pointer may be in a different position. (VMS)
+
+
+<P>
+
+The value returned by <CODE>tell</CODE> may be affected after the call, and the filehandle may be flushed. (Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_chmod">chmod LIST
+
+</A></STRONG><DD>
+Only limited meaning. Disabling/enabling write permission is mapped to
+locking/unlocking the file. (Mac&nbsp;OS)
+
+
+<P>
+
+Only good for changing ``owner'' read-write access, ``group'', and
+``other'' bits are meaningless. (Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_chown">chown LIST
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, Plan9)
+
+
+<P>
+
+Does nothing, but won't fail. (Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_chroot">chroot FILENAME
+
+</A></STRONG><DD>
+<DT><STRONG>chroot
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_crypt">crypt PLAINTEXT,SALT
+
+</A></STRONG><DD>
+May not be available if library or source was not provided when building
+perl. (Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_dbmclose">dbmclose HASH
+
+</A></STRONG><DD>
+Not implemented. (VMS, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_dbmopen">dbmopen HASH,DBNAME,MODE
+
+</A></STRONG><DD>
+Not implemented. (VMS, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_dump">dump LABEL
+
+</A></STRONG><DD>
+Not useful. (Mac&nbsp;OS)
+
+
+<P>
+
+Not implemented. (Win32)
+
+
+<P>
+
+Invokes VMS debugger. (VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_exec">exec LIST
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_fcntl">fcntl FILEHANDLE,FUNCTION,SCALAR
+
+</A></STRONG><DD>
+Not implemented. (Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_flock">flock FILEHANDLE,OPERATION
+
+</A></STRONG><DD>
+Not implemented (Mac&nbsp;OS, VMS).
+
+
+<P>
+
+Available only on Windows NT (not on Windows 95). (Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_fork">fork
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, AmigaOS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getlogin">getlogin
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getpgrp">getpgrp PID
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getppid">getppid
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getpriority">getpriority WHICH,WHO
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getpwnam">getpwnam NAME
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getgrnam">getgrnam NAME
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getnetbyname">getnetbyname NAME
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getpwuid">getpwuid UID
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getgrgid">getgrgid GID
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getnetbyaddr">getnetbyaddr ADDR,ADDRTYPE
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getprotobynumber">getprotobynumber NUMBER
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getservbyport">getservbyport PORT,PROTO
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getpwent">getpwent
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getgrent">getgrent
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_gethostent">gethostent
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getnetent">getnetent
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getprotoent">getprotoent
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getservent">getservent
+
+</A></STRONG><DD>
+Not implemented. (Win32, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_setpwent">setpwent
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_setgrent">setgrent
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_sethostent">sethostent STAYOPEN
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_setnetent">setnetent STAYOPEN
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_setprotoent">setprotoent STAYOPEN
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_setservent">setservent STAYOPEN
+
+</A></STRONG><DD>
+Not implemented. (Plan9, Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_endpwent">endpwent
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_endgrent">endgrent
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_endhostent">endhostent
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_endnetent">endnetent
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_endprotoent">endprotoent
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_endservent">endservent
+
+</A></STRONG><DD>
+Not implemented. (Plan9, Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_getsockopt">getsockopt SOCKET,LEVEL,OPTNAME
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_glob">glob EXPR
+
+</A></STRONG><DD>
+<DT><STRONG>glob
+
+</A></STRONG><DD>
+Globbing built-in, but only <CODE>*</CODE> and <CODE>?</CODE> metacharacters are supported. (Mac&nbsp;OS)
+
+
+<P>
+
+Features depend on external perlglob.exe or perlglob.bat. May be overridden
+with something like File::DosGlob, which is recommended. (Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_ioctl">ioctl FILEHANDLE,FUNCTION,SCALAR
+
+</A></STRONG><DD>
+Not implemented. (VMS)
+
+
+<P>
+
+Available only for socket handles, and it does what the
+<CODE>ioctlsocket()</CODE> call in the Winsock API does. (Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_kill">kill LIST
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS)
+
+
+<P>
+
+Available only for process handles returned by the <A HREF="#item_system">system(1, ...)</A> method of spawning a process. (Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_link">link OLDFILE,NEWFILE
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_lstat">lstat FILEHANDLE
+
+</A></STRONG><DD>
+<DT><STRONG>lstat EXPR
+
+</A></STRONG><DD>
+<DT><STRONG>lstat
+
+</A></STRONG><DD>
+Not implemented. (VMS)
+
+
+<P>
+
+Return values may be bogus. (Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_msgctl">msgctl ID,CMD,ARG
+
+</A></STRONG><DD>
+<DT><STRONG><A NAME="item_msgget">msgget KEY,FLAGS
+
+</A></STRONG><DD>
+<DT><STRONG><A NAME="item_msgsnd">msgsnd ID,MSG,FLAGS
+
+</A></STRONG><DD>
+<DT><STRONG><A NAME="item_msgrcv">msgrcv ID,VAR,SIZE,TYPE,FLAGS
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_open">open FILEHANDLE,EXPR
+
+</A></STRONG><DD>
+<DT><STRONG>open FILEHANDLE
+
+</A></STRONG><DD>
+The <CODE>|</CODE> variants are only supported if ToolServer is installed. (Mac&nbsp;OS)
+
+
+<P>
+
+open to <CODE>|-</CODE> and <CODE>-|</CODE> are unsupported. (Mac&nbsp;OS, Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_pipe">pipe READHANDLE,WRITEHANDLE
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_readlink">readlink EXPR
+
+</A></STRONG><DD>
+<DT><STRONG>readlink
+
+</A></STRONG><DD>
+Not implemented. (Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_select">select RBITS,WBITS,EBITS,TIMEOUT
+
+</A></STRONG><DD>
+Only implemented on sockets. (Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_semctl">semctl ID,SEMNUM,CMD,ARG
+
+</A></STRONG><DD>
+<DT><STRONG><A NAME="item_semget">semget KEY,NSEMS,FLAGS
+
+</A></STRONG><DD>
+<DT><STRONG><A NAME="item_semop">semop KEY,OPSTRING
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_setpgrp">setpgrp PID,PGRP
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_setpriority">setpriority WHICH,WHO,PRIORITY
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_setsockopt">setsockopt SOCKET,LEVEL,OPTNAME,OPTVAL
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Plan9)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_shmctl">shmctl ID,CMD,ARG
+
+</A></STRONG><DD>
+<DT><STRONG><A NAME="item_shmget">shmget KEY,SIZE,FLAGS
+
+</A></STRONG><DD>
+<DT><STRONG><A NAME="item_shmread">shmread ID,VAR,POS,SIZE
+
+</A></STRONG><DD>
+<DT><STRONG><A NAME="item_shmwrite">shmwrite ID,STRING,POS,SIZE
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_socketpair">socketpair SOCKET1,SOCKET2,DOMAIN,TYPE,PROTOCOL
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_stat">stat FILEHANDLE
+
+</A></STRONG><DD>
+<DT><STRONG>stat EXPR
+
+</A></STRONG><DD>
+<DT><STRONG>stat
+
+</A></STRONG><DD>
+mtime and atime are the same thing, and ctime is creation time instead of
+inode change time. (Mac&nbsp;OS)
+
+
+<P>
+
+device and inode are not meaningful. (Win32)
+
+
+<P>
+
+device and inode are not necessarily reliable. (VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_symlink">symlink OLDFILE,NEWFILE
+
+</A></STRONG><DD>
+Not implemented. (Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_syscall">syscall LIST
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS, Win32, VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_system">system LIST
+
+</A></STRONG><DD>
+Only implemented if ToolServer is installed. (Mac&nbsp;OS)
+
+
+<P>
+
+As an optimization, may not call the command shell specified in
+<CODE>$ENV{PERL5SHELL}</CODE>. <A HREF="#item_system">system(1, @args)</A> spawns an external process and immediately returns its process designator,
+without waiting for it to terminate. Return value may be used subsequently
+in <A HREF="#item_wait">wait</A> or <A HREF="#item_waitpid">waitpid</A>. (Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_times">times
+
+</A></STRONG><DD>
+Only the first entry returned is nonzero. (Mac&nbsp;OS)
+
+
+<P>
+
+``cumulative'' times will be bogus. On anything other than Windows NT,
+``system'' time will be bogus, and ``user'' time is actually the time
+returned by the <CODE>clock()</CODE> function in the C runtime library.
+(Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_truncate">truncate FILEHANDLE,LENGTH
+
+</A></STRONG><DD>
+<DT><STRONG>truncate EXPR,LENGTH
+
+</A></STRONG><DD>
+Not implemented. (VMS)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_umask">umask EXPR
+
+</A></STRONG><DD>
+<DT><STRONG>umask
+
+</A></STRONG><DD>
+Returns undef where unavailable, as of version 5.005.
+
+
+<P>
+
+<DT><STRONG><A NAME="item_utime">utime LIST
+
+</A></STRONG><DD>
+Only the modification time is updated. (Mac&nbsp;OS, VMS)
+
+
+<P>
+
+May not behave as expected. (Win32)
+
+
+<P>
+
+<DT><STRONG><A NAME="item_wait">wait
+
+</A></STRONG><DD>
+<DT><STRONG><A NAME="item_waitpid">waitpid PID,FLAGS
+
+</A></STRONG><DD>
+Not implemented. (Mac&nbsp;OS)
+
+
+<P>
+
+Can only be applied to process handles returned for processes spawned using <A HREF="#item_system">system(1, ...)</A>. (Win32)
+
+
+<P>
+
+</DL>
+<P>
+<HR>
+<H1><A NAME="AUTHORS_CONTRIBUTORS">AUTHORS / CONTRIBUTORS
+
+</A></H1>
+Chris Nandor &lt;<A HREF="MAILTO:pudge@pobox.com">pudge@pobox.com</A>&gt;, Gurusamy Sarathy &lt;<A HREF="MAILTO:gsar@umich.edu">gsar@umich.edu</A>&gt;, Peter Prymmer &lt;<A HREF="MAILTO:pvhp@forte.com">pvhp@forte.com</A>&gt;, Tom Christiansen &lt;<A HREF="MAILTO:tchrist@perl.com">tchrist@perl.com</A>&gt;, Nathan Torkington &lt;<A HREF="MAILTO:gnat@frii.com">gnat@frii.com</A>&gt;, Paul Moore &lt;<A
+HREF="MAILTO:Paul.Moore@uk.origin-it.com">Paul.Moore@uk.origin-it.com</A>&gt;, Matthias Neercher &lt;<A HREF="MAILTO:neeri@iis.ee.ethz.ch">neeri@iis.ee.ethz.ch</A>&gt;, Charles Bailey &lt;<A HREF="MAILTO:bailey@genetics.upenn.edu">bailey@genetics.upenn.edu</A>&gt;, Luther Huffman &lt;<A HREF="MAILTO:lutherh@stratcom.com">lutherh@stratcom.com</A>&gt;, Gary Ng &lt;<A HREF="MAILTO:71564.1743@CompuServe.COM">71564.1743@CompuServe.COM</A>&gt;, Nick Ing-Simmons &lt;nick@ni-s.u-net.com&gt;, Paul J. Schinder &lt;<A HREF="MAILTO:schinder@pobox.com">schinder@pobox.com</A>&gt;, Tom Phoenix &lt;<A HREF="MAILTO:rootbeer@teleport.com">rootbeer@teleport.com</A>&gt;, Hugo van der Sanden &lt;<A HREF="MAILTO:h.sanden@elsevier.nl">h.sanden@elsevier.nl</A>&gt;, Dominic Dunlop &lt;<A HREF="MAILTO:domo@vo.lu">domo@vo.lu</A>&gt;, Dan Sugalski &lt;<A HREF="MAILTO:sugalskd@ous.edu">sugalskd@ous.edu</A>&gt;, Andreas J. Koenig &lt;<A HREF="MAILTO:koenig@kulturbox.de">koenig@kulturbox.de</A>&gt;, Andrew M. Langmead &lt;<A HREF="MAILTO:aml@world.std.com">aml@world.std.com</A>&gt;, Andy Dougherty &lt;<A
+HREF="MAILTO:doughera@lafcol.lafayette.edu">doughera@lafcol.lafayette.edu</A>
+&gt;, Abigail &lt;<A HREF="MAILTO:abigail@fnx.com">abigail@fnx.com</A>&gt;.
+
+
+<P>
+
+This document is maintained by Chris Nandor.
+
+
+<P>
+
+<P>
+<HR>
+<H1><A NAME="VERSION">VERSION
+
+</A></H1>
+Version 1.23, last modified 10 July 1998.
+
+<P>
+
+</DL>
+    </BODY>
+
+    </HTML>

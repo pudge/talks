@@ -1,0 +1,12 @@
+Friday, July 10, 1998
+
+TPC 2.0 / Portable Perl presentation materials
+Chris Nandor <pudge@pobox.com>
+Gurusamy Sarathy <gsar@engin.umich.edu>
+
+jazz% tar -tf portable_perl.tar
+portable_perl/
+portable_perl/perlport.html
+portable_perl/perlport.pod
+portable_perl/index.html
+portable_perl/perlsite.gif

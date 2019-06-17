@@ -1,0 +1,233 @@
+Portability and MacPerl, or How I Learned To Stop Worrying And Love The Mac
+CSCI E-13, Harvard University
+April 21, 1999
+Chris Nandor, mailto:pudge@pobox.com, http://pudge.net/
+harvard_19904
+
+Who I Am
+    * Chris Nandor
+        mailto:pudge@pobox.com
+        http://pudge.net/macperl/
+    * Programmer / "webmaster", petersons.com
+        http://www.petersons.com/
+    * Co-Author, MacPerl: Power and Ease
+        http://www.macperl.com/ptf_book/
+    * Columnist for The Perl Journal, "Perl News"
+        http://www.perl.org/news.html
+    * Other stuff: Perl News online, CPAN Testers,
+        MacPerl Module Porters, comp.lang.perl.moderated
+        newsgroup, Boston Perl Mongers, etc.
+
+What This Is About
+    * First, how to think about portability, and how
+        to write portable code
+    * Second, perl on Mac OS
+    * My thoughts on the latter formed many of my thoughts
+        on the former
+
+Port-a-what?
+    * "Portable" means that it works on a variety of platforms
+    * Not all Perl programs have to be portable
+    * The vast majority of Perl _is_ portable
+    * Make design decision at outset
+    * Content here may not be applicable to programs that
+        don't need to be portable
+    * C<man perlport> (perl5.005)
+
+Issue #1: Newlines
+    * carriage returns (CR), linefeeds (LF), newlines (\n), oh my!
+    * C<CR == ASCII 13 == \xD == \015 == \cM>
+    * C<LF == ASCII 10 == \xA == \012 == \cJ>
+    * C<\n == LF>, right?
+
+Issue #1: Newlines (cont.)
+    * Wrong!
+    * The value of C<\n> is determined by several factors
+    * C<\n> is a virtual symbol for logical newline
+    * On most systems, C<\n == LF>, on some Mac OS compilers, C<\n == CR>
+    * C<\r> often mapped to LF when C<\n == CR>, for symmetry
+    * For IO, C<\n> may be interpreted to C<CRLF> on DOSish systems
+    * use C<binmode> for reading and writing binary files
+
+Issue #1: Newlines (cont.)
+    * <PRE> Convert socket newlines to local newlines
+        local $/ = "\012";  # input record separator is LF
+        while (&lt;SOCKET&gt;) {
+            s/\015?\012/\n/;
+        }
+
+        $data =~ s/\015?\012/\n/g;
+
+
+    * <PRE> Same thing, with perl 5.005
+        use Socket qw(:crlf);
+        local $/ = LF;
+        while (&lt;SOCKET&gt;) {
+            s/$CR?$LF/\n/;
+        }
+
+        $data =~ s/$CR?$LF/\n/g;
+
+    * <PRE> Convert data from unknown C<CR>, C<LF>, or C<CRLF>
+        $data =~ s/(\015\012?|\012)/\n/g;
+
+Issue #2: Files and Filesystems
+    * Most filesystems are hierarchical, and files
+        can be identified by paths
+    * Path separator is not always C</>
+    * More to paths than just separators
+    * <PRE> Use the modules, Luke
+        use File::Spec::Functions; # with 5.005, or on CPAN
+        $file = catfile(curdir(), 'dir1', 'dir2', 'file.txt');
+
+        # ./dir1/dir2/file.txt on Unix and Windows
+        # :dir1:dir2:file.txt on Mac OS
+
+
+        use File::Basename;
+        ($name, $path, $suffix) = fileparse($file, "\..+");
+
+        # $name is file, $path is ./dir1/dir2/ (or
+        # :dir1:dir2:), $suffix is .txt
+
+Issue #2: Files and Filesystems (cont.)
+    * C<link>, C<symlink>, C<readlink>, C<lstat>
+    * C<flock>
+    * Don't manipulate already-open files
+    * Watch case
+    * Select reasonable character set and length: 8.3,
+        alphanumerics: "foobar.txt", not "My F&#248;&#248; Bar File".
+    * C<sysopen> is often a good choice for portability
+
+Issue #3: System Interaction ("Don't"s Part I)
+    * No command line?  Don't worry about it, but realize it
+    * Don't depend on C<%ENV>
+    * Don't use C<%SIG>
+    * Don't glob (use C<readdir> instead)
+    * Don't rely on value of C<$!>
+    * No UID, no GID, no HOME
+
+Issue #4: Interprocess Communication ("Don't"s Part II)
+    * C<system>, C<exec>, C<fork>, C<pipe>, C<``>, C<qx>, C<open> with pipe
+    * Target process might not exist, or might be different
+    * Don't open a pipe to sendmail.  Use modules: C<Net::SMTP>
+        (from libnet), C<Mail::Send> and C<Mail::Mailer> (from
+        MailTools)
+    * Sys V IPC (C<msg*>, C<sem*>, C<shm*>) may not exist on Unix machines
+
+Issue #5: Standard Modules
+    * They should all work
+    * Know them, use them, love them
+    * Exceptions: C<ExtUtils::*>, C<CPAN>
+    * C<use AnyDBM_File>
+
+Issue #6: Times and Dates
+    * <PRE> Don't use $ENV{TZ}, calculate timezone
+        use Time::Local;
+        $diff = (timelocal(localtime) - timelocal(gmtime)) / 36;
+        $diff = sprintf("%+0.4d", $diff);
+    * Epoch may not begin at Jan. 1, 1970
+    * Epoch may not begin at GMT
+    * <PRE> Store and transmit dates unambiguously
+        use Date::Parse;
+        $time1 = time;
+
+        # store text version of date
+        $text  = localtime $time1;
+
+        # get back numeric representation later
+        $time2 = str2time $text;
+
+Issue #7: Numbers and Character Sets
+    * Don't assume endianness (use C<pack> and C<unpack> with n and N)
+    * Don't assume ASCII (e.g., with C<chr> and C<ord>)
+    * use locale when appropriate (C<man perllocale>)
+
+Issue #8: System Resources
+    * <PRE> Be careful with constructs that eat a lot of memory
+        # NOTE: this is no longer "bad" in perl5.005
+        for (0..10000000) {}                       # bad
+        for (my $x = 0; $x &lt;= 10000000; ++$x) {}   # good
+
+        @lines = &lt;VERY_LARGE_FILE&gt;;                # bad
+
+        while (&lt;FILE&gt;) {$file .= $_}               # sometimes bad
+        $file = join('', &lt;FILE&gt;);                  # better
+
+Issue #9: Style
+    * Encapsulate platform-specific code
+    * <PRE> C<use Config> and C<%Config> to identify platform's abilities
+        print "We can do symlink!\n"
+          if $Config{d_symlink} eq 'define';
+
+    * <PRE> C<use $^O> (same as C<$Config{osname}>) to identify platform
+        print "You are using $^O\n";
+
+
+A Brief History of MacPerl
+    * Started as MPW tool in Summer 1991 by Matthias Neeracher
+    * Version 4.0.2 in January 1992,
+        sockets and DBM by the end of 1992
+    * In 1993, started mailing list, got GUI,
+        put on Apple Developer CD, version 4.1.0
+    * Ported to PowerPC in 1994, perl 5 in 1995,
+        tweaks and fixes in 1996
+    * Major additions in Toolbox modules in 1997, book in 1998,
+        version 5.2.0r4 / perl5.004
+
+No Command Line?  Then how ... ?
+    * You want it, you got it: perl MPW tool*
+    * MacPerl app designed for systems without MPW
+    * Runs scripts one at a time within application,
+        includes editor windows, and MacPerl window
+        for C<STDIN>, C<STDERR>, C<STDOUT>*
+    * Can select Run from Scripts menu, double-click
+        scripts in Finder, or run via Apple Events
+
+Not Just For CGI
+    * As with Unix or Windows perl, text and file
+        manipulation are primary uses
+    * Droplets*
+    * Filters in text editors*
+
+Mac OS Toolbox Access
+    * File Manager, Resource Manager (e.g., y2klog)
+    * Process Manager (e.g., launch and quit apps)
+    * Internet Config (e.g., setheads)
+    * GUI (e.g., mp3tag)
+    * Prototyping
+
+Interapplication Communication (IAC)
+    * Apple events are a type of Mac OS IAC
+    * AppleScript is a language designed specifically
+        for Apple events
+    * Apple events can be sent and received from many
+        languages, not just AppleScript
+    * Examples (dilbert, edit Netscape URL)
+
+AppleScript
+    * MacPerl usually executes more quickly
+    * If you know Perl, Perl development is
+        mostly faster and easier.  If not, AppleScript may
+        be faster and easier.  In any case, developing scripts
+        with Apple events faster and easier in AppleScript.
+    * Embed AppleScript with C<MacPerl::DoAppleScript>
+        built-in function*
+    * Embed Perl in AppleScript with MacPerl's C<Do Script> event*
+    * Making AppleScript access easier with
+        C<Mac::AppleEvents::Simple>, C<Mac::OSA::Simple>,
+        C<macperlcat>, C<Mac::Glue> project
+
+Projects
+    * Apple's Carbon Dater utility to identify Toolbox calls
+        that will not be compatible with Mac OS X and Carbon
+        driven by MacPerl
+    * Mozilla build process on Mac driven by MacPerl
+    * webset program that builds pudge.net
+
+Future
+    * Integration of sources with main distribution
+        for 5.006
+    * Thread support on its way
+    * Other cool things coming
+    * Mac OS X

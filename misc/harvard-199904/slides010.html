@@ -1,0 +1,68 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<HTML>
+<HEAD>
+	<TITLE>Issue #4: Interprocess Communication ("Don't"s Part II)</TITLE>
+
+<!--
+Created on    : Sunday, April 11, 1999
+Last modified : Friday, October 08, 1999
+by            : Pudge, pudge@pobox.com
+with          : BBEdit and MacPerl
+filename      : /macperl/slides/harvard-199904/slides010.html
+-->
+
+<LINK REL=STYLESHEET TYPE="text/css" HREF="styles.css">
+</HEAD>
+
+<BODY BGCOLOR="#FFD700" ALINK="#888888" VLINK="#888888" LINK="#888888">
+
+<TABLE BORDER=0 CELLPADDING=8>
+<TR><TD WIDTH=225 VALIGN="top">
+
+<TABLE BORDER=4 CELLPADDING=8><TR><TD BGCOLOR="#000000"><FONT COLOR="#FFFFFF">
+
+<H3>Portability and MacPerl, or How I Learned To Stop Worrying And Love The Mac</H3>
+<P><STRONG>CSCI E-13, Harvard University</STRONG></P>
+<P>April 21, 1999</P>
+<P>Chris Nandor, mailto:pudge@pobox.com, http://pudge.net/</P>
+
+
+<P ALIGN="CENTER" CLASS="SMALL">[<A HREF="./index.html">Main</A>] [<A HREF="./slides009.html">Prev</A>] [<A HREF="./slides011.html">Next</A>]</P>
+
+
+
+<P CLASS="SMALL"><EM>&copy; 1999.  All Rights Reserved.</EM>
+
+</FONT></TD></TR></TABLE></TD><TD>
+
+<H2>Issue #4: Interprocess Communication ("Don't"s Part II)</H2>
+
+
+
+<UL>
+
+<LI><TT>system</TT>, <TT>exec</TT>, <TT>fork</TT>, <TT>pipe</TT>, <TT>``</TT>, <TT>qx</TT>, <TT>open</TT> with pipe
+<BR><BR></LI>
+
+
+<LI>Target process might not exist, or might be different
+<BR><BR></LI>
+
+
+<LI>Don't open a pipe to sendmail.  Use modules: <TT>Net::SMTP</TT>
+        (from libnet), <TT>Mail::Send</TT> and <TT>Mail::Mailer</TT> (from
+        MailTools)
+<BR><BR></LI>
+
+
+<LI>Sys V IPC (<TT>msg*</TT>, <TT>sem*</TT>, <TT>shm*</TT>) may not exist on Unix machines
+<BR><BR></LI>
+
+
+</UL>
+
+
+</TD></TR></TABLE>
+
+</BODY>
+</HTML>

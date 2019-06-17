@@ -1,0 +1,13 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+        "http://www.w3.org/TR/2000/REC-xhtml1-20000126/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<title>Code: template</title>
+	<link rel="Stylesheet" href="./styles.css" type="text/css" />
+</head>
+<body class="codepage">
+<blockquote><p class="codepage"><tt>
+[% USE Slash %]<br />[% stories = Slash.db.getNewStories(form.section) %]<br />[% INCLUDE titlebar<br />&nbsp; &nbsp; title =&gt; Slash.db.getSection(form.section).title %]<br /><br />&lt;UL&gt;<br /><br />[%# sid section title time cc d hp %]<br />[% FOR story = stories;<br />&nbsp; &nbsp; "&lt;LI&gt;&lt;B&gt;";<br />&nbsp; &nbsp; Slash.linkStory({<br />&nbsp; &nbsp; &nbsp; &nbsp; section =&gt; story.1,<br />&nbsp; &nbsp; &nbsp; &nbsp; sid&nbsp; &nbsp; &nbsp;=&gt; story.0,<br />&nbsp; &nbsp; &nbsp; &nbsp; link&nbsp; &nbsp; =&gt; story.2,<br />&nbsp; &nbsp; });<br />&nbsp; &nbsp; "&lt;/B&gt; (";<br />&nbsp; &nbsp; &nbsp; &nbsp; Slash.timeCalc("$story.5 12:00", "%Y-%m-%d");<br />&nbsp; &nbsp; ")&lt;/LI&gt;\n";<br />END %]<br /><br />&lt;/UL&gt;<br />
+</tt></p></blockquote>
+</body>
+</html>

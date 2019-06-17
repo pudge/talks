@@ -1,0 +1,289 @@
+Slash: Taming the Beast
+YAPC::America::North 2001
+http://www.yapc.org/America/
+June 2001
+Chris Nandor, OSDN
+
+Introductions
+	* Chris Nandor
+		* Slash core team
+		* Maintainer of MacPerl, writes Perl News column in
+		  The Perl Journal, runs Slash-based use Perl
+		  (http://use.perl.org/)
+		* http://pudge.net/
+		* mailto:pudge@osdn.com
+
+Slash History
+	* Chips &amp; Dips
+	* Slashdot
+	* Andover.Net
+	* Slash Open Source Project
+		* http://slashcode.com/
+		* Slashdot needs
+		* Community needs
+	* VA Linux / OSDN
+
+Before &amp; After
+	* Slash 0.2 Code [LINK "poll_02.html" "*"]
+		* Slash was Rob's first perl program :-)
+	* Slash 0.9
+		* Current code on the site as of January 2000;
+		  stable and sturdy, but hard to extend or modify
+	* Slash 1.0 [LINK "poll_10.html" "*"]
+		* Made reasonable for widespread use, released in
+		  March 2000, current codebase running on Slashdot
+	* Slash 2.0 [LINK "poll_20.html" "*"]
+		* Total rewrite, cleaning up some significant
+		  problems in performance and extensibility
+	* Slash 2.2
+		* Add new features and performance improvements
+		  for Slashdot
+
+Taming the Beast
+	* Business Layer
+	* Data Layer
+	* Display Layer
+	* Installation
+
+Business Layer: Problems
+	* Hardcoded HTML / text
+	* Interspersed SQL with Perl
+	* Disorganized
+	* Difficult to follow
+	* Global variables
+	* Poorly named variables
+	* Performance of Perl code
+	* Performance of SQL code
+
+Business Layer: Solutions I
+	* Break up Slash.pm into smaller components
+		* Slash::DB
+		* Slash::Apache
+		* Slash::Display
+		* Slash::Utility
+	* Remove data assumptions (anonymous user ID)
+
+Business Layer: Solutions II
+	* Commit to Apache / mod_perl
+	* Store data using Apache::ModuleConfig
+		* user, form, constants, DB handle, templates
+	* Apache initialization [LINK "sc-init.jpg" "*"]
+	* Breaking up the code into handlers
+	* Request cycle [LINK "sc-req.jpg" "*"]
+		* URI translation
+		* Authentication
+		* Response
+		* Logging
+
+Data Layer: Problems
+	* SQL code interspersed with business code
+	* SQL calls not portable
+		* Time calculations
+		* Time formatting
+		* Locking
+		* Sequences
+		* Blobs
+		* Keyword conflicts
+
+Data Layer: Solutions
+	* Time formatting moved out to Perl (Date::Manip)
+	* Standardized on SQL
+	* Storing of connection information
+		* Central storage of usernames, passwords, etc.
+		* getDriver() (DBIx::Password)
+		* Security concerns
+	* Inheritance
+		* Slash::DB::Utility
+		* Slash::DB::MySQL
+		* Slash::DB::PostgreSQL
+		* Slash::DB::Oracle
+
+Display Layer: Problems
+	* HTML / text interspersed with business code
+		* Hard to move things around
+		* Hard to follow
+		* Hard to edit
+	* Raw perl code in database for eval
+		* Hard to edit for developers
+		* Harder to edit for designers
+		* Insecure
+Display Layer: Solutions
+	* Template Toolkit
+		* OOP (Slash::Display::Provider)
+		* Actively developed
+		* Fast
+		* Powerful and easy to use
+		  (like Perl, but moreso ;-)
+	* slashDisplay() wrapper function
+		* Creates/fetches cached Template object
+		* Does other things we need, behind the scenes
+		* Slash::Display::Plugin provides Slash API
+		  to templates
+	* [LINK "template.html" "Example template"]
+
+Installation: Problems
+	* Several methods for installing Slash
+	* Required mostly hand-editing and moving of files
+	* Hard to follow and understand for many
+	* Hard to install additional components
+
+Installation: Solutions
+	* Added a Makefile to do much of the "easy" stuff
+	* Streamlined INSTALL document
+	* Standardized installation layout and provide
+	  Slash::Install module for installing additional
+	  plugins, themes, etc.
+
+Final
+	* PHP and Perl
+	* Apache is too hard to install
+		* Distributions
+		* Apache Toolbox (http://www.apachetoolbox.com/)
+	* Support for other languages to plug in to Slash
+
+The Future
+	* Make more extensible
+		* Split off more of Slash into plugins
+		* getObject()
+	* Support more output types, including RSS (Slash::XML),
+	  WML, ...
+	* More access to API and data via SOAP, RSS, ...
+	* Additional plugins
+	* Internationalization
+
+More Information
+	* Slashdot: http://slashdot.org/
+	* Slashcode: http://slashcode.com/
+	* FAQ and Docs: http://slashcode.com/faq.shtml
+	* Mailing lists, source, bugs:<br />http://sourceforge.net/projects/slashcode/
+	* CVS: http://cvs.slashcode.com/
+	* IRC: #slash on OPN
+
+__END__
+__CODE_template__
+[% USE Slash %]
+[% stories = Slash.db.getNewStories(form.section) %]
+[% INCLUDE titlebar
+	title => Slash.db.getSection(form.section).title %]
+
+<UL>
+
+[%# sid section title time cc d hp %]
+[% FOR story = stories;
+	"<LI><B>";
+	Slash.linkStory({
+		section => story.1,
+		sid     => story.0,
+		link    => story.2,
+	});
+	"</B> (";
+		Slash.timeCalc("$story.5 12:00", "%Y-%m-%d");
+	")</LI>\n";
+END %]
+
+</UL>
+__CODE_poll_02__
+sub pollbooth
+{
+        my $qid=@_[0];
+        if(not defined $qid) { ($qid)=getvar("currentqid"); }
+        my $cursor = $dbh->prepare( "
+                SELECT question,answer,aid  from pollquestions, pollanswers
+                WHERE pollquestions.qid=pollanswers.qid AND
+                        pollquestions.qid='$qid'
+                ORDER BY pollanswers.aid
+                ");
+        $cursor->execute;
+        my ($question, $answer, $aid);
+        my $tablestuff;
+
+    
+        my $x=0;
+        while (($question, $answer, $aid) = $cursor->fetchrow) {
+                if($x==0) { print "
+                    <FORM action=$rootdir/pollBooth.pl>
+                    <INPUT type=hidden name=qid value=\"$qid\">";
+                    $tablestuff.="<B>$question</B>"; 
+            $x++;
+        }
+                $tablestuff.= "<BR><INPUT type=radio name=aid
+value=$aid>$answer";
+        }
+        $tablestuff.= "<BR><INPUT type=submit value=Vote> [ 
+                <A href=$rootdir/pollBooth.pl?qid=$qid&aid=-1>Results</A> | 
+                <A href=$rootdir/pollBooth.pl>Polls</A> ] </FORM>";
+        slashmod::fancybox(200,"Slashdot Poll",$tablestuff,"c");
+        $cursor->finish;
+}
+__CODE_poll_10__
+sub pollbooth {
+    my($qid, $notable) = @_;
+
+    ($qid) = getvar("currentqid") unless $qid;
+    my $qid_dbi = $I{dbh}->quote($qid);
+    my $qid_htm = stripByMode($qid, 'attribute');
+
+    my $cursor = $I{dbh}->prepare_cached("
+        SELECT question,answer,aid  from pollquestions, pollanswers
+        WHERE pollquestions.qid=pollanswers.qid AND
+            pollquestions.qid=$qid_dbi
+        ORDER BY pollanswers.aid
+    ");
+    $cursor->execute;
+
+    my($x, $tablestuff) = (0);
+    while (my($question, $answer, $aid) = $cursor->fetchrow) {
+        if ($x == 0) {
+            $tablestuff = <<EOT;
+<FORM ACTION="$I{rootdir}/pollBooth.pl">
+\t<INPUT TYPE="hidden" NAME="qid" VALUE="$qid_htm">
+<B>$question</B>
+EOT
+            $tablestuff .= <<EOT if $I{currentSection};
+\t<INPUT TYPE="hidden" NAME="section" VALUE="$I{currentSection}">
+EOT
+            $x++;
+        }
+        $tablestuff .= qq!<BR><INPUT TYPE="radio" NAME="aid" VALUE="$aid">$answer\n!;
+    }
+
+    my($voters) = sqlSelect('voters', 'pollquestions', " qid=$qid_dbi");
+    my($comments) = sqlSelect('count(*)', 'comments', " sid=$qid_dbi");
+    my $sect = "section=$I{currentSection}&" if $I{currentSection};
+
+    $tablestuff .= qq!<BR><INPUT TYPE="submit" VALUE="Vote"> ! .
+        qq![ <A HREF="$I{rootdir}/pollBooth.pl?${sect}qid=$qid_htm&aid=-1"><B>Results</B></A> | !;
+    $tablestuff .= qq!<A HREF="$I{rootdir}/pollBooth.pl?$sect"><B>Polls</B></A> !
+        unless $notable eq 'rh';
+    $tablestuff .= "Votes:<B>$voters</B>" if $notable eq 'rh';
+    $tablestuff .= " ] <BR>\n";
+    $tablestuff .= "Comments:<B>$comments</B> | Votes:<B>$voters</B>\n" if $notable ne 'rh';
+    $tablestuff .="</FORM>\n";
+    $cursor->finish;
+
+    return $tablestuff if $notable;
+    fancybox($I{fancyboxwidth}, 'Poll', $tablestuff, 'c');
+}
+__CODE_poll_20__
+sub pollbooth {
+    my($qid, $no_table, $center) = @_;
+    my $slashdb = getCurrentDB();
+    my $constants = getCurrentStatic();
+
+    $qid = $slashdb->getVar('currentqid', 'value') unless $qid;
+    return "" if $qid eq "";
+    my $sect = getCurrentUser('currentSection');
+    my $polls = $slashdb->getPoll($qid);
+
+    my $pollbooth = slashDisplay('pollbooth', {
+        polls       => $polls,
+        question    => $polls->[0][0],
+        qid         => $qid,
+        voters      => $slashdb->getPollQuestion($qid, 'voters'),
+        comments    => $slashdb->countCommentsBySid($qid),
+        sect        => $sect,
+    }, 1);
+
+    return $pollbooth if $no_table;
+    fancybox($constants->{fancyboxwidth}, 'Poll', $pollbooth, $center, 1);
+}

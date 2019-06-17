@@ -1,0 +1,56 @@
+How To Be Really Cool Using MacPerl
+Perl Conference 4.0
+20 July 2000
+Chris Nandor, Andover.Net
+tpc_2000_presentation
+
+Me
+	* Work on Slash code for Andover.Net / VA Linux
+	* Been using MacPerl extensively since 1996
+	* Co-authored "MacPerl: Power and Ease"
+	* Author of several MacPerl modules
+	* Help with MacPerl porting
+
+You
+	* Use a Mac
+	* Know Perl
+	* Want to be really cool
+
+A Few Short Steps to Coolness
+	* (see previous slide)
+	* Learn the [tT]oolbox (Mac:: modules, CPAN, your Mac
+		applications, AppleScript)
+	* Find a task you want accomplished
+	* Discover how to do it
+	* Do it
+
+Laziness
+	* Or maybe find a task that needs accomplishing
+		that you don't want to have to accomplish
+		manually
+	* I don't want to click on a half dozen apps every morning
+		to start them up
+	* I don't want to change all of my settings every time
+		I go to work or come home
+	* I don't want to compare all of these files by hand
+	* I don't want to have to think to surf the web
+
+Impatience
+	* Or maybe find a task that you want done more quickly
+	* I want to find a URL I went to recently
+	* I want to edit the web page I am looking at
+	* I want to call a "compiled" MacPerl script, not a
+		compiled AppleScript
+
+Hubris
+	* Or maybe find a task that doesn't really need to be
+		done at all, but doing it in MacPerl will
+		<EM>really</EM> make you look cool
+	* Write a game
+	* Play movies or MP3s
+	* Sing
+
+Links
+	* http://pudge.net/macperl/
+	* http://pudge.net/macperl/tpc/2000/
+	* http://developer.apple.com/techpubs/macos8/mac8.html

@@ -1,0 +1,57 @@
+	BODY			{
+						font-family: "Times New Roman";
+						font-size: 12pt;
+					}
+
+	TT, PRE			{
+						font-family: "Courier", monospace;
+						font-size: 12pt;
+						font-weight: normal;
+					}
+
+	P.foot			{
+						font-size: 10pt;
+						font-weight: normal;
+					}
+
+	A.contact:link	{
+						color: 0000FF;
+					}
+
+	A.contact:visited	{
+						color: FF0000;
+					}
+
+	H1				{
+						font-size: 22pt;
+						font-family: "Verdana";
+					}
+
+	H2				{
+						font-size: 18pt;
+						font-family: "Verdana";
+					}
+
+	H3				{
+						font-size: 14pt;
+						font-family: "Verdana";
+					}
+
+	H1.bigbig		{
+						font-family: "Verdana";
+						font-size: 42pt;
+						text-align: right;
+					}
+
+	H2.bigbig		{
+						font-family: "Verdana";
+						font-size: 22pt;
+						font-style: italic;
+						text-align: right;
+					}
+
+	H3.bigbig		{
+						font-family: "Verdana";
+						font-size: 18pt;
+						text-align: right;
+					}

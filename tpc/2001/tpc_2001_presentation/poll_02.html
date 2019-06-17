@@ -1,0 +1,13 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+        "http://www.w3.org/TR/2000/REC-xhtml1-20000126/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<title>Code: poll_02</title>
+	<link rel="Stylesheet" href="./styles.css" type="text/css" />
+</head>
+<body class="codepage">
+<blockquote><p class="codepage"><tt>
+sub pollbooth<br />{<br />&nbsp; &nbsp; &nbsp; &nbsp; my $qid=@_[0];<br />&nbsp; &nbsp; &nbsp; &nbsp; if(not defined $qid) { ($qid)=getvar("currentqid"); }<br />&nbsp; &nbsp; &nbsp; &nbsp; my $cursor = $dbh-&gt;prepare( "<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; SELECT question,answer,aid&nbsp; from pollquestions, pollanswers<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; WHERE pollquestions.qid=pollanswers.qid AND<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; pollquestions.qid='$qid'<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ORDER BY pollanswers.aid<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ");<br />&nbsp; &nbsp; &nbsp; &nbsp; $cursor-&gt;execute;<br />&nbsp; &nbsp; &nbsp; &nbsp; my ($question, $answer, $aid);<br />&nbsp; &nbsp; &nbsp; &nbsp; my $tablestuff;<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; my $x=0;<br />&nbsp; &nbsp; &nbsp; &nbsp; while (($question, $answer, $aid) = $cursor-&gt;fetchrow) {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; if($x==0) { print "<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &lt;FORM action=$rootdir/pollBooth.pl&gt;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &lt;INPUT type=hidden name=qid value=\"$qid\"&gt;";<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; $tablestuff.="&lt;B&gt;$question&lt;/B&gt;"; <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; $x++;<br />&nbsp; &nbsp; &nbsp; &nbsp; }<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; $tablestuff.= "&lt;BR&gt;&lt;INPUT type=radio name=aid<br />value=$aid&gt;$answer";<br />&nbsp; &nbsp; &nbsp; &nbsp; }<br />&nbsp; &nbsp; &nbsp; &nbsp; $tablestuff.= "&lt;BR&gt;&lt;INPUT type=submit value=Vote&gt; [ <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &lt;A href=$rootdir/pollBooth.pl?qid=$qid&amp;aid=-1&gt;Results&lt;/A&gt; | <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &lt;A href=$rootdir/pollBooth.pl&gt;Polls&lt;/A&gt; ] &lt;/FORM&gt;";<br />&nbsp; &nbsp; &nbsp; &nbsp; slashmod::fancybox(200,"Slashdot Poll",$tablestuff,"c");<br />&nbsp; &nbsp; &nbsp; &nbsp; $cursor-&gt;finish;<br />}<br />
+</tt></p></blockquote>
+</body>
+</html>

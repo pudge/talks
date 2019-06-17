@@ -1,0 +1,130 @@
+Perl In My World
+----------------
+Chris Nandor, Wednesday, April 21, 1999
+
+I. Introduction
+    A.  Who I Am
+    B.  What This Is About
+
+II. Portability
+    A.  Thinking about portability
+        i.   Port-a-what?
+        ii.  Not all Perl programs have to be portable
+        iii. The vast majority of Perl is portable
+        iv.  man perlport
+
+    B.  Newlines
+        i.   What is \n, really (and when)
+        ii.  When to use what
+        iii. Workarounds
+
+    C.  Files and Filesystems
+        i.   Kinds of filesystems, paths
+        ii.  Path separators
+        iii. Workarounds
+             a. File::Spec
+                * as of 5.005, available as separate download
+                * how-to
+             b. File::Basename
+                * standard for any recent perl
+                * how-to
+        iv.  System support
+             a. links
+             b. flock
+             c. open / delete / move / rename / tie open files
+             d. case sensitivity
+             e. character set and length
+                * 8.3
+                * < and >
+                * sysopen
+
+    D.  System Interaction
+        i.   Aware of lack of command line
+        ii.  Contents of %ENV
+        iii. Signals
+        iv.  Globbing
+        v.   $! values
+        vi.  User and group IDs, home directory
+
+    E.  Interprocess Communication
+        i.   Don't do it
+        ii.  system, exec, fork, pipe, ``, qx, open with |
+        iii. Existence of target process
+        iv.  Mail
+             a. Net::SMTP
+             b. Mail::Send / Mail::Mailer (MailTools)
+             c. Mail::Sendmail
+        v.   SYS V IPC (msg*, sem*, shm*)
+
+    F.  Standard Modules
+        i.   Know them, use them, love them
+        ii.  ExtUtils::*, CPAN
+        iii. AnyDBM_File
+
+    G.  Times, Dates
+        i.   $ENV{TZ}
+        ii.  Epoch start date and TZ
+        iii. Workarounds
+             a. Calculate TZ
+             b. Store dates unambiguously
+
+    H.  Numbers, Character Sets
+        i.   Endianness
+        ii.  Don't assume ASCII
+        iii. use locale
+
+    G.  Memory
+        i.   Memory, memory, memory
+        ii.  More memory
+
+    H.  Style
+        i.   Encapsulate platform-specific code
+        ii.  use Config and $^O
+
+
+III. MacPerl
+    A.  History
+
+    B.  No Command Line?
+        i.   If you want, you got it
+        ii.  Other options
+
+    C.  Uses
+        i.   Text and file manipulation
+             a. Droplets
+             b. Alpha
+             c. BBEdit
+        ii.  Toolbox
+             a. Interapplication communication
+                * Dilbert
+                * Edit documents from browser
+             b. InternetConfig
+                * Set heads
+             c. Processes
+                * Quit or launch apps
+             d. Files, Resources
+                * y2k
+             e. GUI
+                * mp3tag
+
+        iii. Prototyping
+
+    D.  AppleScript
+        i.   Speed
+        ii.  Ease
+        iii. MacPerl::DoAppleScript
+        iv.  tell application "MacPerl" to Do Script
+        v.   Mac::Glue
+
+    E.  Projects
+        i.   Carbon Dater
+        ii.  Mozilla
+        iii. webset
+
+
+    E.  Future
+        i.   Integration of sources for 5.006
+        ii.  Threads
+        iii. pipe, socketpair, etc.
+        iv.  Shared library
+        v.   Mac OS X

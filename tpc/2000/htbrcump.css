@@ -1,0 +1,29 @@
+	BODY, UL, P {
+		font-size: 18pt;
+	}
+
+	LI {
+		padding-bottom: 28pt;
+		font-size: 28pt;
+	}
+
+	TT, PRE {
+		font-family: "ProFont, Courier", monospace;
+		font-size: 24pt;
+		font-weight: normal;
+	}
+
+	H1 {
+		font-size: 36pt;
+		font-family: "Verdana";
+	}
+
+	H2 {
+		font-size: 36pt;
+		font-family: "Verdana";
+	}
+
+	H3 {
+		font-size: 18pt;
+		font-family: "Verdana";
+	}
