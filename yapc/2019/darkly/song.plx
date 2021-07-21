@@ -6,7 +6,7 @@ our $I;
 verse1();
 prechorus();
 chorus(1);
-verse1();
+verse2();
 prechorus();
 chorus(2);
 
